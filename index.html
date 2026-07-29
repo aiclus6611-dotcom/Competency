@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>STAR 任務票選系統</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <style>
+    :root {
+      --primary:#0ea5e9;
+      --primary-dark:#0284c7;
+      --accent:#f59e0b;
+      --success:#10b981;
+      --danger:#dc2626;
+      --purple:#1976d2;
+      --ink:#1e293b;
+      --muted:#64748b;
+      --line:#e2e8f0;
+      --soft:#f8fafc;
+      --card:#ffffff;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0;
+      font-family:"微軟正黑體","Microsoft JhengHei",system-ui,sans-serif;
+      background:#f8fafc;
+      color:var(--ink);
+    }
+    button,input,textarea,select { font:inherit; }
+    button { cursor:pointer; }
+    button:disabled { cursor:not-allowed; opacity:.55; }
+    .page { min-height:100vh; }
+    .loading {
+      position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center;
+      background:rgba(255,255,255,.92); font-size:1.25rem; font-weight:800;
+    }
+    .toast {
+      position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:9999;
+      background:rgba(15,23,42,.94); color:#fff; border-radius:999px; padding:12px 20px;
+      box-shadow:0 10px 30px rgba(0,0,0,.22); max-width:90vw; text-align:center;
+    }
+    .container { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:28px 0 60px; }
+    .student-container { width:min(760px,calc(100% - 28px)); margin:0 auto; padding:18px 0 70px; }
+    .card {
+      background:var(--card); border:1px solid #e2e8f0; border-radius:18px;
+      box-shadow:0 4px 15px rgba(0,0,0,.05); padding:24px;
+    }
+    .btn {
+      border:0; border-radius:10px; padding:11px 17px; font-weight:800; transition:.18s;
+      display:inline-flex; align-items:center; justify-content:center; gap:7px; text-decoration:none;
+    }
+    .btn:hover:not(:disabled) { transform:translateY(-1px); filter:brightness(.98); }
+    .btn-primary { background:var(--primary); color:#fff; }
+    .btn-success { background:var(--success); color:#fff; }
+    .btn-danger { background:var(--danger); color:#fff; }
+    .btn-warning { background:var(--accent); color:#fff; }
+    .btn-purple { background:var(--purple); color:#fff; }
+    .btn-ghost { background:#fff; color:#334155; border:1px solid var(--line); }
+    .btn-soft { background:#f0f9ff; color:#0284c7; border:1px solid #bae6fd; }
+    .btn-block { width:100%; }
+    .field-label { display:block; margin:0 0 8px; font-weight:900; color:#273449; }
+    .field-help { margin:6px 0 0; color:var(--muted); font-size:.9rem; line-height:1.55; }
+    input[type="text"], input[type="password"], input[type="number"], textarea, select {
+      width:100%; border:1px solid #cbd5e1; border-radius:11px; padding:12px 13px; color:var(--ink);
+      background:#fff; outline:none; transition:.18s;
+    }
+    textarea { min-height:118px; resize:vertical; line-height:1.65; }
+    input:focus,textarea:focus,select:focus { border-color:#0ea5e9; box-shadow:0 0 0 3px rgba(14,165,233,.12); }
+    input:disabled,textarea:disabled { background:#f1f5f9; color:#64748b; }
+    .topbar {
+      display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:20px;
+    }
+    .brand { display:flex; align-items:center; gap:12px; }
+    .brand-icon {
+      width:50px; height:50px; border-radius:15px; display:grid; place-items:center;
+      background:linear-gradient(135deg,#0ea5e9,#1976d2); color:#fff; font-size:1.7rem;
+      box-shadow:0 8px 20px rgba(14,165,233,.22);
+    }
+    .brand h1 { margin:0; font-size:clamp(1.45rem,3vw,2rem); }
+    .brand p { margin:4px 0 0; color:var(--muted); }
+    .login-wrap { min-height:100vh; display:grid; place-items:center; padding:24px; }
+    .login-box { width:min(430px,100%); border-top:7px solid var(--primary); text-align:center; }
+    .login-box .hero { font-size:3rem; margin-bottom:10px; }
+    .login-box h1 { margin:0 0 8px; }
+    .login-box p { color:var(--muted); margin:0 0 22px; }
+    .login-box input { text-align:center; letter-spacing:3px; margin-bottom:14px; }
+    .create-row { display:grid; grid-template-columns:1fr auto; gap:12px; }
+    .activity-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:18px; margin-top:20px; }
+    .activity-card { border-top:6px solid var(--primary); }
+    .activity-card h3 { margin:0 0 8px; font-size:1.25rem; }
+    .activity-meta { color:var(--muted); font-size:.92rem; margin-bottom:18px; }
+    .activity-actions { display:grid; gap:9px; }
+    .inline-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .empty {
+      text-align:center; padding:50px 20px; color:var(--muted); border:2px dashed #cbd5e1;
+      border-radius:16px; background:rgba(255,255,255,.65);
+    }
+    .phase-board {
+      background:linear-gradient(135deg,#1e293b,#0f172a); color:#fff; border-radius:20px; padding:24px;
+      box-shadow:0 14px 35px rgba(15,23,42,.22); margin-bottom:20px;
+    }
+    .phase-board small { color:#bae6fd; font-weight:800; letter-spacing:.08em; }
+    .phase-board h2 { margin:8px 0 6px; font-size:clamp(1.65rem,4vw,2.5rem); }
+    .phase-board p { margin:0; color:#e0f2fe; line-height:1.65; }
+    .phase-pill {
+      display:inline-flex; align-items:center; border-radius:999px; padding:7px 12px; margin-top:14px;
+      background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.18); font-weight:800;
+    }
+    .teacher-grid { display:grid; grid-template-columns:350px 1fr; gap:20px; align-items:start; }
+    .sticky { position:sticky; top:16px; }
+    .section-title { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .section-title h2,.section-title h3 { margin:0; }
+    .stage-list { display:grid; gap:10px; }
+    .stage-button {
+      width:100%; border:1px solid var(--line); background:#fff; border-radius:13px; padding:14px;
+      text-align:left; display:flex; gap:12px; align-items:flex-start;
+    }
+    .stage-button.active { border-color:#0ea5e9; background:#f0f9ff; box-shadow:0 0 0 3px rgba(14,165,233,.1); }
+    .stage-no { flex:0 0 34px; width:34px; height:34px; border-radius:10px; display:grid; place-items:center; background:#e2e8f0; font-weight:900; }
+    .stage-button.active .stage-no { background:var(--primary); color:#fff; }
+    .stage-copy strong { display:block; margin-bottom:3px; }
+    .stage-copy span { color:var(--muted); font-size:.88rem; line-height:1.4; }
+    .metric-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:18px; }
+    .metric { background:#f8fafc; border:1px solid var(--line); border-radius:14px; padding:15px; text-align:center; }
+    .metric strong { display:block; font-size:1.65rem; color:#0284c7; }
+    .metric span { color:var(--muted); font-size:.9rem; }
+    .entry-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(285px,1fr)); gap:16px; }
+    .entry-card { position:relative; overflow:hidden; padding:0 24px 76px; }
+    .hero-tag {
+      position:relative; margin:0 -24px 18px; min-height:62px; padding:13px 18px;
+      background:linear-gradient(135deg,#0ea5e9,#1976d2); color:#fff;
+      display:flex; align-items:center; flex-wrap:wrap; gap:8px; word-break:break-word;
+    }
+    .hero-tag-chip {
+      display:inline-flex; align-items:center; max-width:100%; padding:6px 10px; border-radius:999px;
+      background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.28);
+      font-size:1.08rem; font-weight:900; line-height:1.3; overflow-wrap:anywhere;
+    }
+    .tag-inputs { display:grid; gap:10px; margin-top:10px; }
+    .tag-input-row { display:grid; grid-template-columns:46px minmax(0,1fr); align-items:stretch; }
+    .tag-prefix {
+      display:grid; place-items:center; border:1px solid #bae6fd; border-right:0; border-radius:11px 0 0 11px;
+      background:#e0f2fe; color:#0284c7; font-size:1.25rem; font-weight:950;
+    }
+    .tag-input-row input { border-radius:0 11px 11px 0; }
+    .tag-input-row input:focus { position:relative; z-index:1; }
+    .auto-tag-note {
+      display:flex; align-items:flex-start; gap:9px; margin-top:8px; padding:10px 12px; border-radius:11px;
+      background:#f0f9ff; border:1px solid #bae6fd; color:#0369a1; line-height:1.5; font-size:.9rem;
+    }
+    .tag-preview { margin-top:10px; color:#475569; font-size:.9rem; line-height:1.55; }
+    .entry-name { font-weight:900; font-size:1.08rem; margin-bottom:12px; }
+    .star-block { margin-top:12px; padding-top:12px; border-top:1px dashed #d8e0eb; }
+    .star-block b { display:block; color:#334155; margin-bottom:5px; }
+    .star-block p { margin:0; color:#475569; white-space:pre-wrap; line-height:1.6; }
+    .round-editor { display:grid; gap:11px; }
+    .round-row { display:grid; grid-template-columns:44px 1fr auto; gap:9px; align-items:center; }
+    .round-index { width:38px; height:38px; display:grid; place-items:center; border-radius:10px; background:#e0f2fe; color:#0284c7; font-weight:900; }
+    .round-state { font-size:.84rem; color:var(--muted); margin-top:4px; }
+    .result-list { display:grid; gap:12px; }
+    .result-row {
+      display:grid; grid-template-columns:1fr auto; gap:15px; align-items:center; padding:16px;
+      border:1px solid var(--line); border-radius:14px; background:#fff;
+    }
+    .result-title { font-size:1.1rem; font-weight:900; }
+    .result-sub { color:var(--muted); margin-top:4px; font-size:.9rem; }
+    .vote-count {
+      min-width:68px; height:56px; border-radius:14px; border:0; background:#f0f9ff; color:#0284c7;
+      font-size:1.35rem; font-weight:950; display:grid; place-items:center; padding:0 10px;
+    }
+    .vote-count:hover { background:#e0f2fe; }
+    .bar { height:9px; background:#e2e8f0; border-radius:999px; overflow:hidden; margin-top:10px; }
+    .bar > div { height:100%; background:linear-gradient(90deg,#0ea5e9,#1976d2); border-radius:999px; }
+    .student-head { margin-bottom:16px; }
+    .student-head h1 { margin:0; font-size:clamp(1.45rem,6vw,2rem); }
+    .student-head p { margin:7px 0 0; color:var(--muted); }
+    .notice { border-radius:14px; padding:14px 16px; line-height:1.6; margin-bottom:16px; }
+    .notice-blue { background:#f0f9ff; color:#0369a1; border:1px solid #bae6fd; }
+    .notice-green { background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; }
+    .notice-amber { background:#fffbeb; color:#92400e; border:1px solid #fde68a; }
+    .form-grid { display:grid; gap:17px; }
+    .save-strip {
+      position:sticky; bottom:10px; z-index:20; margin-top:18px; display:flex; gap:12px; align-items:center; justify-content:space-between;
+      background:rgba(255,255,255,.94); backdrop-filter:blur(8px); border:1px solid var(--line); border-radius:15px; padding:12px;
+      box-shadow:0 10px 30px rgba(15,23,42,.12);
+    }
+    .save-status { color:var(--success); font-weight:800; font-size:.9rem; }
+    .candidate-list { display:grid; gap:12px; }
+    .candidate {
+      border:2px solid #e2e8f0; background:#fff; border-radius:16px; padding:14px; text-align:left; width:100%;
+      transition:.18s;
+    }
+    .candidate:hover { border-color:#7dd3fc; transform:translateY(-1px); }
+    .candidate.selected { border-color:var(--primary); background:#f0f9ff; box-shadow:0 0 0 3px rgba(14,165,233,.1); }
+    .candidate-open {
+      display:block; width:100%; padding:3px; border:0; background:transparent; text-align:left; border-radius:12px;
+      color:inherit;
+    }
+    .candidate-open:hover .tag { text-decoration:underline; text-underline-offset:4px; }
+    .candidate .tag { font-size:1.25rem; font-weight:950; color:#0284c7; margin-bottom:5px; }
+    .candidate .name { font-weight:900; }
+    .candidate .summary { color:var(--muted); margin-top:7px; line-height:1.5; }
+    .candidate-view-hint { margin-top:8px; color:#0284c7; font-size:.86rem; font-weight:850; }
+    .candidate-actions { display:flex; gap:9px; margin-top:13px; padding-top:12px; border-top:1px dashed #cbd5e1; }
+    .candidate-actions .btn { flex:1; margin:0; }
+    .candidate-detail-head {
+      margin:-24px -24px 20px; padding:22px 24px; color:#fff;
+      background:linear-gradient(135deg,#0ea5e9,#1976d2); border-radius:18px 18px 0 0;
+    }
+    .candidate-detail-tags { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:9px; }
+    .candidate-detail-tag { padding:6px 10px; border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.16); border-radius:999px; font-weight:950; }
+    .candidate-detail-name { font-size:1.18rem; font-weight:900; }
+    .modal-overlay { position:fixed; inset:0; z-index:4000; background:rgba(15,23,42,.64); display:grid; place-items:center; padding:18px; }
+    .modal { width:min(620px,100%); max-height:88vh; overflow:auto; background:#fff; border-radius:18px; padding:24px; box-shadow:0 25px 70px rgba(0,0,0,.32); }
+    .modal h2 { margin-top:0; }
+    .modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:22px; }
+    .voter-list { display:grid; gap:9px; margin-top:14px; }
+    .voter-item { display:flex; justify-content:space-between; gap:12px; padding:12px 14px; border-radius:12px; background:#f8fafc; border:1px solid var(--line); }
+    .voter-item strong { color:#0284c7; }
+    .toolbar { display:flex; gap:9px; flex-wrap:wrap; }
+    .divider { height:1px; background:var(--line); margin:20px 0; }
+    .muted { color:var(--muted); }
+    .danger-zone { border:1px solid #fecaca; background:#fff7f7; border-radius:14px; padding:15px; }
+    .small { font-size:.9rem; }
+    .checkbox-line { display:flex; gap:9px; align-items:flex-start; }
+    .teacher-main { padding-bottom:60px; }
+    .teacher-toolbar { display:flex; align-items:center; gap:9px; }
+    .gear-button {
+      width:46px; height:46px; padding:0; border-radius:50%; border:1px solid var(--line); background:#fff;
+      color:#334155; font-size:1.35rem; box-shadow:0 7px 20px rgba(15,23,42,.1);
+    }
+    .gear-button:hover { transform:rotate(18deg); background:#f8fafc; }
+    .teacher-content-card { min-height:48vh; }
+    .teacher-stage-head { display:flex; align-items:flex-end; justify-content:space-between; gap:15px; margin-bottom:18px; flex-wrap:wrap; }
+    .teacher-stage-head h2 { margin:0; font-size:clamp(1.45rem,3vw,2rem); }
+    .teacher-stage-head p { margin:5px 0 0; color:var(--muted); }
+    .entry-card-teacher { padding-bottom:76px; }
+    .entry-delete {
+      position:absolute; right:14px; bottom:14px; padding:8px 12px; border-radius:9px; border:1px solid #fecaca;
+      background:#fff7f7; color:#b91c1c; font-weight:850;
+    }
+    .entry-delete:hover { background:#fee2e2; }
+    .dock-button {
+      flex:0 0 auto; border:1px solid var(--line); background:#fff; color:#475569; border-radius:10px;
+      padding:9px 13px; font-size:.9rem; font-weight:900; white-space:nowrap;
+    }
+    .dock-button:hover { background:#f1f5f9; }
+    .dock-button.active { background:var(--primary); color:#fff; border-color:var(--primary); box-shadow:0 5px 13px rgba(14,165,233,.23); }
+    .dock-button.vote.active { background:#1976d2; border-color:#1976d2; box-shadow:0 5px 13px rgba(25,118,210,.23); }
+    .dock-arrow { flex:0 0 auto; color:#94a3b8; font-weight:900; }
+    .settings-stage-panel { margin-bottom:14px; background:#f8fafc; }
+    .settings-stage-flow {
+      display:flex; align-items:center; gap:8px; overflow-x:auto; padding:4px 1px 7px; scrollbar-width:thin;
+    }
+    .settings-stage-flow .dock-button { min-height:42px; }
+    .settings-current-stage {
+      display:inline-flex; align-items:center; gap:7px; margin-top:10px; padding:8px 11px; border-radius:999px;
+      background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-size:.88rem; font-weight:900;
+    }
+    .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .settings-panel { border:1px solid var(--line); border-radius:14px; padding:16px; background:#f8fafc; }
+    .settings-panel h3 { margin:0 0 12px; }
+    .settings-round-list { display:grid; gap:10px; margin-top:12px; }
+    .settings-round-row {
+      display:grid; grid-template-columns:38px minmax(0,1fr) auto; gap:9px; align-items:center;
+      padding:10px; border:1px solid var(--line); border-radius:12px; background:#fff;
+    }
+    .settings-round-actions { display:flex; gap:7px; flex-wrap:wrap; justify-content:flex-end; }
+    .settings-round-actions .btn { padding:9px 11px; font-size:.88rem; }
+    .projection-note { font-size:.86rem; color:var(--muted); line-height:1.55; margin-top:8px; }
+    .round-count-note {
+      margin-top:9px; padding:10px 12px; border-radius:11px; background:#f0f9ff; border:1px solid #bae6fd;
+      color:#0369a1; font-size:.86rem; line-height:1.55;
+    }
+    .history-review-banner {
+      display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+      margin-bottom:15px; padding:12px 14px; border-radius:13px; background:#fffbeb; border:1px solid #fde68a; color:#92400e;
+    }
+    .history-review-banner strong { color:#78350f; }
+    @media (max-width:900px) {
+      .teacher-grid { grid-template-columns:1fr; }
+      .sticky { position:static; }
+    }
+    @media (max-width:640px) {
+      .container { width:min(100% - 20px,1180px); padding-top:16px; }
+      .card { padding:18px; border-radius:15px; }
+      .create-row { grid-template-columns:1fr; }
+      .metric-grid { grid-template-columns:1fr; }
+      .round-row { grid-template-columns:36px 1fr; }
+      .round-row .btn { grid-column:2; }
+      .inline-actions { grid-template-columns:1fr; }
+      .save-strip { align-items:stretch; flex-direction:column; }
+      .save-strip .btn { width:100%; }
+      .candidate-actions { flex-direction:column; }
+      .candidate-actions .btn { width:100%; }
+      .result-row { grid-template-columns:1fr auto; }
+      .settings-grid { grid-template-columns:1fr; }
+      .settings-round-row { grid-template-columns:34px 1fr; }
+      .settings-round-actions { grid-column:2; justify-content:flex-start; }
+      .settings-stage-flow { gap:6px; }
+      .dock-button { padding:8px 11px; font-size:.84rem; }
+    }
+  </style>
+</head>
+<body>
+<div id="app" class="page">
+  <div v-if="isLoading" class="loading">資料載入中…</div>
+  <div v-if="toastMsg" class="toast">{{ toastMsg }}</div>
+
+  <div v-if="confirmBox.show" class="modal-overlay">
+    <div class="modal" style="max-width:460px;">
+      <h2>⚠️ 確認操作</h2>
+      <p style="line-height:1.7;">{{ confirmBox.message }}</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" @click="confirmBox.show=false">取消</button>
+        <button class="btn btn-danger" @click="runConfirm">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="renameBox.show" class="modal-overlay">
+    <div class="modal" style="max-width:480px;">
+      <h2>重新命名活動</h2>
+      <input type="text" v-model="renameBox.name" @keydown.enter="confirmRename" placeholder="輸入新的活動名稱">
+      <div class="modal-actions">
+        <button class="btn btn-ghost" @click="renameBox.show=false">取消</button>
+        <button class="btn btn-primary" @click="confirmRename">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="voterModal.show" class="modal-overlay" @click.self="voterModal.show=false">
+    <div class="modal">
+      <div class="section-title">
+        <div>
+          <div class="muted small">投給此人的學員</div>
+          <h2 style="margin-top:4px;">{{ voterModal.heroTagsText }}・{{ voterModal.candidateName }}</h2>
+        </div>
+        <button class="btn btn-ghost" @click="voterModal.show=false">關閉</button>
+      </div>
+      <div v-if="voterModal.voters.length" class="voter-list">
+        <div v-for="(voter,idx) in voterModal.voters" :key="idx" class="voter-item">
+          <strong>{{ voter.voterName || '未填姓名' }}</strong>
+          <span class="muted">第 {{ idx + 1 }} 票</span>
+        </div>
+      </div>
+      <div v-else class="empty" style="padding:30px;">目前還沒有人投票。</div>
+    </div>
+  </div>
+
+
+  <div v-if="candidateModal.show && candidateModal.entry" class="modal-overlay" @click.self="candidateModal.show=false">
+    <div class="modal">
+      <div class="candidate-detail-head">
+        <div class="candidate-detail-tags">
+          <span v-for="tag in heroTagLabels(candidateModal.entry)" :key="tag" class="candidate-detail-tag">{{ tag }}</span>
+        </div>
+        <div class="candidate-detail-name">{{ candidateModal.entry.name || '未填姓名' }}</div>
+      </div>
+      <div class="star-block" style="margin-top:0;padding-top:0;border-top:0;"><b>ST｜情況／任務</b><p>{{ candidateModal.entry.st || '—' }}</p></div>
+      <div class="star-block"><b>A｜行動</b><p>{{ candidateModal.entry.a || '—' }}</p></div>
+      <div class="star-block"><b>R｜結果</b><p>{{ candidateModal.entry.r || '—' }}</p></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" @click="candidateModal.show=false">先不投</button>
+        <button class="btn btn-primary" @click="voteFromCandidateModal">投給這位</button>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="showTeacherSettings" class="modal-overlay" @click.self="showTeacherSettings=false">
+    <div class="modal" style="width:min(900px,100%);">
+      <div class="section-title">
+        <div>
+          <div class="muted small">講師專用</div>
+          <h2 style="margin-top:4px;">⚙️ 活動與投票設定</h2>
+        </div>
+        <button class="btn btn-ghost" @click="showTeacherSettings=false">關閉</button>
+      </div>
+
+      <section class="settings-panel settings-stage-panel">
+        <div class="section-title">
+          <div>
+            <h3>課程階段切換</h3>
+            <div class="muted small">切換後，講師主畫面與所有學員畫面會立即同步。</div>
+          </div>
+        </div>
+        <div class="settings-stage-flow" aria-label="課程階段切換">
+          <button class="dock-button" :class="{active:settings.phase==='compose'}" @click="setPhase('compose')">1 個人撰寫</button>
+          <span class="dock-arrow">→</span>
+          <button class="dock-button" :class="{active:settings.phase==='showcase'}" @click="setPhase('showcase')">2 全班展示</button>
+          <template v-for="(round,index) in roundArray" :key="round.id">
+            <span class="dock-arrow">→</span>
+            <button class="dock-button vote" :class="{active:settings.phase==='voting' && settings.activeRoundId===round.id}" :title="round.title || `投票 ${index+1}`" @click="startRound(round)">投票 {{ index+1 }}</button>
+          </template>
+        </div>
+        <div class="settings-current-stage">● 目前：{{ currentPhaseTitle }}</div>
+      </section>
+
+      <div class="settings-grid">
+        <section class="settings-panel">
+          <h3>活動工具</h3>
+          <div style="display:grid;gap:9px;">
+            <button class="btn btn-primary btn-block" @click="copyCurrentStudentLink">🔗 複製學員連結</button>
+            <button class="btn btn-ghost btn-block" @click="exportActivity">💾 匯出活動資料</button>
+          </div>
+          <p class="projection-note">這些設定只在齒輪視窗內顯示，關閉後投影畫面不會出現。</p>
+        </section>
+
+        <section class="settings-panel">
+          <h3>投票參數</h3>
+          <label class="field-label">總投票輪數</label>
+          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;">
+            <input type="number" min="1" max="20" v-model.number="desiredRoundCount">
+            <button class="btn btn-purple" @click="applyRoundCount">套用</button>
+          </div>
+          <div class="round-count-note">縮減輪數只會把多出的「投票階段按鈕」暫時隱藏，不會刪除題目、票數或投票者名單；之後再把輪數調高，原本結果會重新出現。</div>
+          <div class="divider" style="margin:15px 0;"></div>
+          <div class="checkbox-line">
+            <input id="allowSelfVoteModal" type="checkbox" v-model="localAllowSelfVote" @change="saveAllowSelfVote" style="width:auto;margin-top:4px;">
+            <label for="allowSelfVoteModal"><strong>允許投給自己</strong><div class="field-help">關閉後，學員投票時不會看到自己的選項。</div></label>
+          </div>
+        </section>
+      </div>
+
+      <section class="settings-panel" style="margin-top:14px;">
+        <div class="section-title">
+          <div><h3>各輪任務題目</h3><div class="muted small">設定完成後，講師可在上方「課程階段切換」區啟動各輪投票。</div></div>
+          <button class="btn btn-primary" @click="saveRoundTitles">儲存題目</button>
+        </div>
+        <div v-if="roundArray.length" class="settings-round-list">
+          <div v-for="(round,index) in roundArray" :key="round.id" class="settings-round-row">
+            <div class="round-index">{{ index+1 }}</div>
+            <div>
+              <input type="text" v-model="roundDrafts[round.id]" :placeholder="`第 ${index+1} 次任務主題`">
+              <div class="round-state">
+                <span v-if="settings.phase==='voting' && settings.activeRoundId===round.id" style="color:#16a34a;font-weight:900;">● 目前進行中</span>
+                <span v-else>已收到 {{ voteCountByRound(round.id) }} 票</span>
+              </div>
+            </div>
+            <div class="settings-round-actions">
+              <button class="btn btn-soft" @click="viewRoundResults(round)">查看結果</button>
+              <button class="btn btn-purple" @click="startRound(round)">開始／切換本輪</button>
+              <button class="btn btn-danger" @click="clearRoundVotes(round.id)">清空票數</button>
+            </div>
+          </div>
+        </div>
+        <div v-else class="empty" style="padding:28px;">尚未建立投票輪次。</div>
+      </section>
+    </div>
+  </div>
+
+  <!-- 管理登入 -->
+  <div v-if="currentView==='login'" class="login-wrap">
+    <div class="card login-box">
+      <div class="hero">⭐</div>
+      <h1>STAR 任務票選系統</h1>
+      <p>請先輸入講師管理密碼</p>
+      <input type="password" v-model="loginPassword" @keydown.enter="login" placeholder="管理密碼">
+      <button class="btn btn-primary btn-block" @click="login">進入活動管理</button>
+    </div>
+  </div>
+
+  <!-- 活動大廳 -->
+  <main v-else-if="currentView==='lobby'" class="container">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-icon">★</div>
+        <div><h1>STAR 任務票選系統</h1><p>建立並分開管理不同課程活動</p></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="create-row">
+        <input type="text" v-model="newActivityName" @keydown.enter="createActivity" placeholder="例如：2026 新進同仁 STAR 練習">
+        <button class="btn btn-success" @click="createActivity">＋ 建立新活動</button>
+      </div>
+    </div>
+
+    <div v-if="activities.length" class="activity-grid">
+      <div v-for="activity in activities" :key="activity.id" class="card activity-card">
+        <h3>{{ activity.name }}</h3>
+        <div class="activity-meta">建立於 {{ formatTime(activity.createdAt) }}</div>
+        <div class="activity-actions">
+          <a :href="getActivityLink(activity.id,'teacher')" target="_blank" class="btn btn-primary btn-block">👨‍🏫 開啟講師端</a>
+          <button class="btn btn-warning btn-block" @click="copyActivityLink(activity.id)">🔗 複製學員連結</button>
+          <div class="inline-actions">
+            <button class="btn btn-soft" @click="openRename(activity)">✏️ 重新命名</button>
+            <button class="btn btn-ghost" @click="duplicateActivity(activity)">📄 複製活動</button>
+          </div>
+          <button class="btn btn-danger btn-block" @click="deleteActivity(activity)">🗑️ 刪除活動</button>
+        </div>
+      </div>
+    </div>
+    <div v-else-if="!isLoading" class="empty" style="margin-top:20px;">目前還沒有活動，請先建立一個。</div>
+  </main>
+
+  <!-- 講師端 -->
+  <main v-else-if="currentView==='teacher'" class="container teacher-main">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-icon">★</div>
+        <div><h1>{{ settings.title || 'STAR 活動' }}</h1><p>STAR 任務票選系統</p></div>
+      </div>
+      <div class="teacher-toolbar">
+        <button class="gear-button" @click="openTeacherSettings" title="開啟講師設定">⚙️</button>
+      </div>
+    </div>
+
+    <section class="phase-board">
+      <small>目前全班所在階段</small>
+      <h2>{{ currentPhaseTitle }}</h2>
+      <p>{{ currentPhaseDescription }}</p>
+      <div class="phase-pill">目前已有 {{ entryArray.length }} 位學員完成案例</div>
+      <div v-if="teacherViewRoundId" class="phase-pill" style="margin-left:8px;background:rgba(245,158,11,.22);border-color:rgba(253,230,138,.45);">講師正在回看：{{ teacherDisplayRound ? teacherDisplayRound.title : '歷史投票結果' }}</div>
+    </section>
+
+    <section v-if="!teacherViewRoundId && settings.phase==='compose'" class="card teacher-content-card">
+      <div class="teacher-stage-head">
+        <div><h2>學員撰寫進度</h2><p>畫面即時顯示已儲存的 STAR；講師可刪除誤填或重複資料。</p></div>
+        <div class="metric"><strong>{{ entryArray.length }}</strong><span>已儲存案例</span></div>
+      </div>
+      <div v-if="entryArray.length" class="entry-grid">
+        <article v-for="entry in entryArray" :key="entry.id" class="card entry-card entry-card-teacher">
+          <div class="hero-tag"><span v-for="tag in heroTagLabels(entry)" :key="tag" class="hero-tag-chip">{{ tag }}</span></div>
+          <div class="entry-name">{{ entry.name || '未填姓名' }}</div>
+          <div class="star-block"><b>ST｜情況／任務</b><p>{{ entry.st || '—' }}</p></div>
+          <div class="star-block"><b>A｜行動</b><p>{{ entry.a || '—' }}</p></div>
+          <div class="star-block"><b>R｜結果</b><p>{{ entry.r || '—' }}</p></div>
+          <button class="entry-delete" @click="deleteEntry(entry)">🗑️ 刪除此筆</button>
+        </article>
+      </div>
+      <div v-else class="empty">目前還沒有學員儲存案例。</div>
+    </section>
+
+    <section v-else-if="!teacherViewRoundId && settings.phase==='showcase'" class="card teacher-content-card">
+      <div class="teacher-stage-head">
+        <div><h2>全班 STAR 案例</h2><p>英雄稱號放在每張卡片最前方；每人最多可顯示三個稱號，學員端同步唯讀展示。</p></div>
+        <div class="metric"><strong>{{ entryArray.length }}</strong><span>展示案例</span></div>
+      </div>
+      <div v-if="entryArray.length" class="entry-grid">
+        <article v-for="entry in entryArray" :key="entry.id" class="card entry-card entry-card-teacher">
+          <div class="hero-tag"><span v-for="tag in heroTagLabels(entry)" :key="tag" class="hero-tag-chip">{{ tag }}</span></div>
+          <div class="entry-name">{{ entry.name || '未填姓名' }}</div>
+          <div class="star-block"><b>ST｜情況／任務</b><p>{{ entry.st || '—' }}</p></div>
+          <div class="star-block"><b>A｜行動</b><p>{{ entry.a || '—' }}</p></div>
+          <div class="star-block"><b>R｜結果</b><p>{{ entry.r || '—' }}</p></div>
+          <button class="entry-delete" @click="deleteEntry(entry)">🗑️ 刪除此筆</button>
+        </article>
+      </div>
+      <div v-else class="empty">目前還沒有可顯示的案例。</div>
+    </section>
+
+    <section v-else-if="teacherDisplayRound" class="card teacher-content-card">
+      <div v-if="teacherViewRoundId" class="history-review-banner">
+        <div><strong>📚 歷史結果回看</strong><div class="small" style="margin-top:3px;">這只會改變講師投影畫面，不會切換學員目前所在階段，也不會重新開放這一輪投票。</div></div>
+        <button class="btn btn-ghost" @click="stopViewingRound">回到目前階段</button>
+      </div>
+      <div class="teacher-stage-head">
+        <div>
+          <div class="muted small">{{ teacherViewRoundId ? '已保存的投票結果' : '即時投票結果' }}・已投 {{ teacherDisplayVoteCount }} 人</div>
+          <h2>{{ teacherDisplayRound.title || '未命名任務' }}</h2>
+          <p>點擊票數即可查看是哪些學員投給他。切換到其他投票輪次時，本輪結果會繼續保留。</p>
+        </div>
+      </div>
+      <div v-if="roundResults.length" class="result-list">
+        <div v-for="result in roundResults" :key="result.id" class="result-row">
+          <div>
+            <div class="result-title">{{ formatHeroTags(result) }}・{{ result.name }}</div>
+            <div class="result-sub">{{ summarize(result.st,70) }}</div>
+            <div class="bar"><div :style="{width: resultBarWidth(result.count)}"></div></div>
+          </div>
+          <button class="vote-count" title="點擊查看誰投票" @click="openVoters(result)">{{ result.count }} 票</button>
+        </div>
+      </div>
+      <div v-else class="empty">目前尚無案例或票數。</div>
+    </section>
+
+    <section v-else class="card empty teacher-content-card">請點右上角齒輪，選擇目前課程階段。</section>
+
+  </main>
+
+  <!-- 學員端 -->
+  <main v-else-if="currentView==='student'" class="student-container">
+    <header class="student-head">
+      <h1>{{ settings.title || 'STAR 任務票選系統' }}</h1>
+      <p>{{ studentPhaseTitle }}</p>
+    </header>
+
+    <!-- 第一階段：自己填寫 -->
+    <section v-if="settings.phase==='compose'">
+      <div class="notice notice-blue"><strong>第一階段｜寫下自己的 STAR</strong><br>目前只有你看得到自己的內容；請完成後按「儲存我的 STAR」。</div>
+      <div class="card">
+        <div class="form-grid">
+          <div>
+            <label class="field-label">姓名</label>
+            <input type="text" v-model.trim="myEntry.name" maxlength="30" placeholder="請輸入姓名">
+          </div>
+          <div>
+            <label class="field-label">ST｜情況／任務</label>
+            <textarea v-model.trim="myEntry.st" maxlength="1500" placeholder="當時發生什麼事？你面對的任務或挑戰是什麼？"></textarea>
+          </div>
+          <div>
+            <label class="field-label">A｜行動</label>
+            <textarea v-model.trim="myEntry.a" maxlength="1500" placeholder="你具體做了哪些行動？請盡量寫出步驟與做法。"></textarea>
+          </div>
+          <div>
+            <label class="field-label">R｜結果</label>
+            <textarea v-model.trim="myEntry.r" maxlength="1500" placeholder="最後產生什麼結果？若有數字、回饋或影響，請一起寫下來。"></textarea>
+          </div>
+          <div>
+            <label class="field-label">英雄稱號（最多 3 個 Hashtag）</label>
+            <div class="auto-tag-note">
+              <span style="font-size:1.2rem;line-height:1;">#</span>
+              <div><strong>系統已經幫你加上 #，每格只要輸入文字即可。</strong></div>
+            </div>
+            <div class="tag-inputs">
+              <div class="tag-input-row">
+                <span class="tag-prefix">#</span>
+                <input type="text" v-model="myEntry.heroTags[0]" maxlength="30"
+                       @input="sanitizeHeroTagInput(0)" @blur="trimHeroTagInput(0)"
+                       placeholder="第 1 個稱號（必填），例如：滅火器">
+              </div>
+              <div v-if="showSecondHeroTagInput" class="tag-input-row">
+                <span class="tag-prefix">#</span>
+                <input type="text" v-model="myEntry.heroTags[1]" maxlength="30"
+                       @input="sanitizeHeroTagInput(1)" @blur="trimHeroTagInput(1)"
+                       placeholder="第 2 個稱號（選填）">
+              </div>
+              <div v-if="showThirdHeroTagInput" class="tag-input-row">
+                <span class="tag-prefix">#</span>
+                <input type="text" v-model="myEntry.heroTags[2]" maxlength="30"
+                       @input="sanitizeHeroTagInput(2)" @blur="trimHeroTagInput(2)"
+                       placeholder="第 3 個稱號（選填）">
+              </div>
+            </div>
+            <p class="field-help">第 1 個稱號必填；填完一欄後，下一個選填欄位才會出現。請用簡短文字，讓大家一眼看懂這個案例展現的特色。</p>
+            <div class="tag-preview"><strong>顯示預覽：</strong>{{ myHeroTagPreview || '尚未輸入稱號' }}</div>
+          </div>
+        </div>
+        <div class="save-strip">
+          <div><div class="save-status" v-if="myEntrySavedAt">✓ 已儲存：{{ formatTime(myEntrySavedAt) }}</div><div class="muted small" v-else>尚未儲存</div></div>
+          <button class="btn btn-primary" @click="saveMyEntry">儲存我的 STAR</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 第二階段：全班觀看 -->
+    <section v-else-if="settings.phase==='showcase'">
+      <div class="notice notice-green"><strong>第二階段｜全班案例展示</strong><br>現在可以閱讀所有人的 STAR；本階段只能觀看，不能修改。</div>
+      <div v-if="entryArray.length" class="entry-grid">
+        <article v-for="entry in entryArray" :key="entry.id" class="card entry-card">
+          <div class="hero-tag"><span v-for="tag in heroTagLabels(entry)" :key="tag" class="hero-tag-chip">{{ tag }}</span></div>
+          <div class="entry-name">{{ entry.name || '未填姓名' }}</div>
+          <div class="star-block"><b>ST｜情況／任務</b><p>{{ entry.st || '—' }}</p></div>
+          <div class="star-block"><b>A｜行動</b><p>{{ entry.a || '—' }}</p></div>
+          <div class="star-block"><b>R｜結果</b><p>{{ entry.r || '—' }}</p></div>
+        </article>
+      </div>
+      <div v-else class="empty">目前還沒有可顯示的案例。</div>
+    </section>
+
+    <!-- 投票階段 -->
+    <section v-else-if="settings.phase==='voting'">
+      <div class="notice notice-amber">
+        <strong>任務投票｜{{ activeRound ? activeRound.title : '等待講師設定任務' }}</strong><br>
+        請選出你認為最適合接任這項任務的人。每人本輪可投 1 票，講師會知道票是誰投的，以便邀請你說明理由。
+      </div>
+
+      <div v-if="!mySavedEntry || !mySavedEntry.name" class="notice notice-blue">系統找不到你的姓名資料。請使用原本填寫 STAR 的同一台裝置進入，或請講師暫時切回第一階段讓你補填。</div>
+
+      <div v-if="activeRound && eligibleCandidates.length" class="candidate-list">
+        <article v-for="entry in eligibleCandidates" :key="entry.id" class="candidate" :class="{selected:myVoteCandidateId===entry.id}">
+          <button class="candidate-open" @click="openCandidateDetail(entry)" title="查看完整 STAR">
+            <div class="tag">{{ formatHeroTags(entry) }}</div>
+            <div class="name">{{ entry.name || '未填姓名' }}</div>
+            <div class="summary">{{ summarize(entry.st,80) }}</div>
+            <div class="candidate-view-hint">點英雄稱號或姓名，查看完整 STAR</div>
+          </button>
+          <div v-if="myVoteCandidateId===entry.id" style="margin-top:10px;color:#0284c7;font-weight:900;">✓ 你目前投給這位</div>
+          <div class="candidate-actions">
+            <button class="btn btn-ghost" @click="openCandidateDetail(entry)">查看完整 STAR</button>
+            <button class="btn btn-primary" @click="castVote(entry)">{{ myVoteCandidateId===entry.id ? '已投給這位' : '投給這位' }}</button>
+          </div>
+        </article>
+      </div>
+      <div v-else class="empty">目前沒有可投票的候選人，或講師尚未開啟本輪。</div>
+
+      <div v-if="myVoteCandidateId" class="save-strip">
+        <div><strong style="color:#16a34a;">✓ 本輪投票已記錄</strong><div class="muted small">在講師切換下一階段前，你仍可改投其他人。</div></div>
+        <button class="btn btn-ghost" @click="removeMyVote">取消本輪投票</button>
+      </div>
+    </section>
+
+    <section v-else class="card empty">等待講師開始活動。</section>
+  </main>
+</div>
+
+<script>
+const { createApp } = Vue;
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDUPGhkiJgxeYDYHqEaXCYvKh2vdTGqypw",
+  authDomain: "class-discussion-01.firebaseapp.com",
+  databaseURL: "https://class-discussion-01-default-rtdb.firebaseio.com",
+  projectId: "class-discussion-01",
+  storageBucket: "class-discussion-01.firebasestorage.app",
+  messagingSenderId: "724687365020",
+  appId: "1:724687365020:web:380b5d85872dc2d9b85e59",
+  measurementId: "G-XYN5JV48T7"
+};
+
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+createApp({
+  data() {
+    return {
+      isLoading: true,
+      currentView: 'login',
+      loginPassword: '',
+      toastMsg: '',
+      activityId: '',
+      studentId: '',
+      activities: [],
+      newActivityName: '',
+      settings: {
+        title: '',
+        phase: 'compose',
+        activeRoundId: '',
+        allowSelfVote: true,
+        roundCount: null
+      },
+      entries: {},
+      rounds: {},
+      allVotes: {},
+      myEntry: { name:'', st:'', a:'', r:'', heroTags:['','',''] },
+      myEntrySavedAt: 0,
+      myVoteCandidateId: '',
+      desiredRoundCount: 3,
+      roundDrafts: {},
+      localAllowSelfVote: true,
+      confirmBox: { show:false, message:'', action:null },
+      renameBox: { show:false, id:'', name:'' },
+      voterModal: { show:false, candidateId:'', candidateName:'', heroTagsText:'', voters:[] },
+      candidateModal: { show:false, entry:null },
+      showTeacherSettings: false,
+      teacherViewRoundId: '',
+      listeners: []
+    };
+  },
+  computed: {
+    entryArray() {
+      return Object.keys(this.entries || {}).map(id => ({ id, ...this.entries[id] }))
+        .filter(x => x.name || x.st || x.a || x.r || x.heroTag || x.heroTags)
+        .sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
+    },
+    allRoundArray() {
+      return Object.keys(this.rounds || {}).map(id => ({ id, ...this.rounds[id] }))
+        .sort((a,b) => (a.order || 0) - (b.order || 0) || (a.createdAt || 0) - (b.createdAt || 0));
+    },
+    configuredRoundCount() {
+      const saved = Number(this.settings.roundCount);
+      if (Number.isFinite(saved) && saved >= 1) return Math.max(1, Math.min(20, Math.floor(saved)));
+      return Math.max(1, this.allRoundArray.length || 1);
+    },
+    roundArray() {
+      return this.allRoundArray.slice(0, this.configuredRoundCount);
+    },
+    activeRound() {
+      return this.settings.activeRoundId && this.rounds[this.settings.activeRoundId]
+        ? { id:this.settings.activeRoundId, ...this.rounds[this.settings.activeRoundId] }
+        : null;
+    },
+    teacherDisplayRound() {
+      if (this.teacherViewRoundId && this.rounds[this.teacherViewRoundId]) {
+        return { id:this.teacherViewRoundId, ...this.rounds[this.teacherViewRoundId] };
+      }
+      return this.settings.phase === 'voting' ? this.activeRound : null;
+    },
+    currentPhaseTitle() {
+      if (this.settings.phase === 'compose') return '第一階段｜學員個人撰寫 STAR';
+      if (this.settings.phase === 'showcase') return '第二階段｜全班案例展示';
+      if (this.settings.phase === 'voting') return `任務投票｜${this.activeRound ? this.activeRound.title : '等待設定任務'}`;
+      return '等待講師開始';
+    },
+    currentPhaseDescription() {
+      if (this.settings.phase === 'compose') return '學員只能看見並修改自己的資料，其他人的內容不會顯示。';
+      if (this.settings.phase === 'showcase') return '所有人的稱號與 STAR 案例同步公開，但所有資料都已鎖定，學員只能閱讀。';
+      if (this.settings.phase === 'voting') return '學員每人可投一票；講師端即時顯示票數，並可點票數查看投票者姓名。';
+      return '請選擇活動階段。';
+    },
+    studentPhaseTitle() {
+      if (this.settings.phase === 'compose') return '第一階段：只看得到自己的內容';
+      if (this.settings.phase === 'showcase') return '第二階段：觀看全班案例';
+      if (this.settings.phase === 'voting') return '任務票選進行中';
+      return '等待講師開始';
+    },
+    myHeroTagPreview() {
+      const first = this.cleanHeroTagText(this.myEntry.heroTags[0]);
+      if (!first) return '';
+      const tags = [first];
+      const second = this.cleanHeroTagText(this.myEntry.heroTags[1]);
+      if (second) {
+        tags.push(second);
+        const third = this.cleanHeroTagText(this.myEntry.heroTags[2]);
+        if (third) tags.push(third);
+      }
+      return tags.map(tag => `#${tag}`).join('　');
+    },
+    showSecondHeroTagInput() {
+      return !!this.cleanHeroTagText(this.myEntry.heroTags[0]);
+    },
+    showThirdHeroTagInput() {
+      return !!this.cleanHeroTagText(this.myEntry.heroTags[1]);
+    },
+    currentRoundVotes() {
+      if (!this.activeRound) return {};
+      return this.allVotes[this.activeRound.id] || {};
+    },
+    currentRoundVoteCount() {
+      return Object.keys(this.currentRoundVotes || {}).length;
+    },
+    teacherDisplayVotes() {
+      if (!this.teacherDisplayRound) return {};
+      return this.allVotes[this.teacherDisplayRound.id] || {};
+    },
+    teacherDisplayVoteCount() {
+      return Object.keys(this.teacherDisplayVotes || {}).length;
+    },
+    roundResults() {
+      const counts = {};
+      Object.values(this.teacherDisplayVotes || {}).forEach(v => {
+        if (v && v.candidateId) counts[v.candidateId] = (counts[v.candidateId] || 0) + 1;
+      });
+      return this.entryArray.map(entry => ({ ...entry, count:counts[entry.id] || 0 }))
+        .sort((a,b) => b.count - a.count || (a.name || '').localeCompare(b.name || '', 'zh-Hant'));
+    },
+    maxRoundCount() {
+      return Math.max(1, ...this.roundResults.map(x => x.count));
+    },
+    mySavedEntry() {
+      return this.entries[this.studentId] || null;
+    },
+    eligibleCandidates() {
+      if (this.settings.allowSelfVote === false) return this.entryArray.filter(x => x.id !== this.studentId);
+      return this.entryArray;
+    }
+  },
+  mounted() {
+    const params = new URLSearchParams(location.search);
+    const activityId = params.get('activity');
+    const role = params.get('role');
+
+    if (!activityId) {
+      this.currentView = 'login';
+      this.isLoading = false;
+      return;
+    }
+
+    this.activityId = activityId;
+    this.currentView = role === 'teacher' ? 'teacher' : 'student';
+
+    if (this.currentView === 'student') {
+      const storageKey = `star_student_id_${activityId}`;
+      let id = localStorage.getItem(storageKey);
+      if (!id) {
+        id = `student_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,9)}`;
+        localStorage.setItem(storageKey,id);
+      }
+      this.studentId = id;
+    }
+
+    this.attachActivityListeners();
+  },
+  beforeUnmount() {
+    this.listeners.forEach(({ref,event,callback}) => ref.off(event,callback));
+  },
+  methods: {
+    showToast(msg) {
+      this.toastMsg = msg;
+      clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => this.toastMsg = '', 3200);
+    },
+    askConfirm(message, action) {
+      this.confirmBox = { show:true, message, action };
+    },
+    runConfirm() {
+      const action = this.confirmBox.action;
+      this.confirmBox.show = false;
+      this.confirmBox.action = null;
+      if (action) action();
+    },
+    openTeacherSettings() {
+      this.desiredRoundCount = this.configuredRoundCount;
+      this.localAllowSelfVote = this.settings.allowSelfVote !== false;
+      const drafts = {};
+      this.roundArray.forEach(round => { drafts[round.id] = round.title || ''; });
+      this.roundDrafts = drafts;
+      this.showTeacherSettings = true;
+    },
+    login() {
+      if (this.loginPassword !== '20150117') {
+        this.showToast('❌ 密碼錯誤，請重新輸入');
+        this.loginPassword = '';
+        return;
+      }
+      this.currentView = 'lobby';
+      this.isLoading = true;
+      const ref = db.ref('starActivitiesList');
+      ref.on('value', snap => {
+        const value = snap.val() || {};
+        this.activities = Object.keys(value).map(id => ({ id, ...value[id] })).sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+        this.isLoading = false;
+      });
+    },
+    async createActivity() {
+      const name = this.newActivityName.trim();
+      if (!name) return this.showToast('請先輸入活動名稱');
+      const ref = db.ref('starActivitiesList').push();
+      const id = ref.key;
+      const now = Date.now();
+      const updates = {};
+      updates[`starActivitiesList/${id}`] = { name, createdAt:now };
+      updates[`starActivities/${id}/settings`] = { title:name, phase:'compose', activeRoundId:'', allowSelfVote:true, roundCount:3, createdAt:now };
+      for (let i=1;i<=3;i++) {
+        const rid = db.ref(`starActivities/${id}/rounds`).push().key;
+        updates[`starActivities/${id}/rounds/${rid}`] = { title:`第 ${i} 次任務：請輸入任務主題`, order:i, createdAt:now+i };
+      }
+      await db.ref().update(updates);
+      this.newActivityName = '';
+      this.showToast('✅ 活動建立完成');
+    },
+    getActivityLink(id, role) {
+      const url = new URL(location.href);
+      url.searchParams.set('activity',id);
+      if (role === 'teacher') url.searchParams.set('role','teacher');
+      else url.searchParams.delete('role');
+      return url.href;
+    },
+    async copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (e) {
+        const el = document.createElement('textarea');
+        el.value = text; document.body.appendChild(el); el.select(); document.execCommand('copy'); el.remove();
+      }
+      this.showToast('✅ 連結已複製');
+    },
+    copyActivityLink(id) { this.copyText(this.getActivityLink(id,'student')); },
+    copyCurrentStudentLink() { this.copyText(this.getActivityLink(this.activityId,'student')); },
+    openRename(activity) { this.renameBox = { show:true, id:activity.id, name:activity.name }; },
+    async confirmRename() {
+      const name = this.renameBox.name.trim();
+      if (!name) return this.showToast('活動名稱不能空白');
+      const id = this.renameBox.id;
+      const updates = {};
+      updates[`starActivitiesList/${id}/name`] = name;
+      updates[`starActivities/${id}/settings/title`] = name;
+      await db.ref().update(updates);
+      this.renameBox.show = false;
+      this.showToast('✅ 已重新命名');
+    },
+    duplicateActivity(activity) {
+      this.askConfirm(`確定複製「${activity.name}」嗎？會複製階段與任務設定，但不會複製學員資料與票數。`, async () => {
+        const snap = await db.ref(`starActivities/${activity.id}`).once('value');
+        const source = snap.val() || {};
+        const newRef = db.ref('starActivitiesList').push();
+        const id = newRef.key;
+        const name = `${activity.name}（複製）`;
+        const now = Date.now();
+        const updates = {};
+        updates[`starActivitiesList/${id}`] = { name, createdAt:now };
+        const sourceRoundCount = Number(source.settings && source.settings.roundCount) || Math.max(1, Object.keys(source.rounds || {}).length || 3);
+        updates[`starActivities/${id}/settings`] = { ...(source.settings || {}), title:name, phase:'compose', activeRoundId:'', roundCount:sourceRoundCount, createdAt:now };
+        Object.keys(source.rounds || {}).forEach(oldId => {
+          const rid = db.ref(`starActivities/${id}/rounds`).push().key;
+          updates[`starActivities/${id}/rounds/${rid}`] = { ...source.rounds[oldId] };
+        });
+        await db.ref().update(updates);
+        this.showToast('✅ 活動已複製');
+      });
+    },
+    deleteActivity(activity) {
+      this.askConfirm(`確定刪除「${activity.name}」？所有 STAR、投票與投票者名單都會一併刪除，且無法復原。`, async () => {
+        const updates = {};
+        updates[`starActivitiesList/${activity.id}`] = null;
+        updates[`starActivities/${activity.id}`] = null;
+        await db.ref().update(updates);
+        this.showToast('🗑️ 活動已刪除');
+      });
+    },
+    attach(ref,event,callback) {
+      ref.on(event,callback);
+      this.listeners.push({ref,event,callback});
+    },
+    attachActivityListeners() {
+      let initialSettings = false;
+      const settingsRef = db.ref(`starActivities/${this.activityId}/settings`);
+      this.attach(settingsRef,'value',snap => {
+        const value = snap.val();
+        if (value) {
+          this.settings = { title:'', phase:'compose', activeRoundId:'', allowSelfVote:true, roundCount:null, ...value };
+          this.localAllowSelfVote = this.settings.allowSelfVote !== false;
+        }
+        initialSettings = true;
+        this.isLoading = false;
+        if (this.currentView === 'student') this.syncMyVoteFromData();
+      });
+
+      const entriesRef = db.ref(`starActivities/${this.activityId}/entries`);
+      this.attach(entriesRef,'value',snap => {
+        this.entries = snap.val() || {};
+        if (this.currentView === 'student' && this.entries[this.studentId]) {
+          const e = this.entries[this.studentId];
+          const tagTexts = this.heroTagTexts(e);
+          this.myEntry = {
+            name:e.name || '', st:e.st || '', a:e.a || '', r:e.r || '',
+            heroTags:[tagTexts[0] || '', tagTexts[1] || '', tagTexts[2] || '']
+          };
+          this.myEntrySavedAt = e.updatedAt || e.createdAt || 0;
+        } else if (this.currentView === 'student') {
+          this.myEntry = { name:'', st:'', a:'', r:'', heroTags:['','',''] };
+          this.myEntrySavedAt = 0;
+        }
+      });
+
+      const roundsRef = db.ref(`starActivities/${this.activityId}/rounds`);
+      this.attach(roundsRef,'value',snap => {
+        this.rounds = snap.val() || {};
+        this.allRoundArray.forEach(r => {
+          if (!(r.id in this.roundDrafts)) this.roundDrafts[r.id] = r.title || '';
+          else if (this.roundDrafts[r.id] === undefined) this.roundDrafts[r.id] = r.title || '';
+        });
+        this.desiredRoundCount = this.configuredRoundCount;
+        if (this.teacherViewRoundId && !this.rounds[this.teacherViewRoundId]) this.teacherViewRoundId = '';
+        if (this.currentView === 'student') this.syncMyVoteFromData();
+      });
+
+      const votesRef = db.ref(`starActivities/${this.activityId}/votes`);
+      this.attach(votesRef,'value',snap => {
+        this.allVotes = snap.val() || {};
+        if (this.currentView === 'student') this.syncMyVoteFromData();
+      });
+
+      setTimeout(() => { if (!initialSettings) this.isLoading = false; }, 5000);
+    },
+    async setPhase(phase) {
+      this.teacherViewRoundId = '';
+      const updates = { phase };
+      if (phase !== 'voting') updates.activeRoundId = '';
+      await db.ref(`starActivities/${this.activityId}/settings`).update(updates);
+      this.showTeacherSettings = false;
+      this.showToast(phase === 'compose' ? '已切換為個人撰寫' : '已切換為全班展示');
+    },
+    async applyRoundCount() {
+      const target = Math.max(1,Math.min(20,Number(this.desiredRoundCount) || 1));
+      const current = this.configuredRoundCount;
+      if (target === current) return this.showToast('投票輪數沒有變更');
+
+      const updates = {};
+      const existingCount = this.allRoundArray.length;
+
+      // 只有在資料庫中從未建立過該輪時才新增；曾經建立但目前隱藏的輪次會直接恢復。
+      if (target > existingCount) {
+        for (let i=existingCount+1;i<=target;i++) {
+          const id = db.ref(`starActivities/${this.activityId}/rounds`).push().key;
+          updates[`starActivities/${this.activityId}/rounds/${id}`] = {
+            title:`第 ${i} 次任務：請輸入任務主題`,
+            order:i,
+            createdAt:Date.now()+i
+          };
+        }
+      }
+
+      // 輪數縮減只改「顯示輪數」，絕不刪除輪次、票數或投票者名單。
+      updates[`starActivities/${this.activityId}/settings/roundCount`] = target;
+
+      const activeIndex = this.activeRound
+        ? this.allRoundArray.findIndex(round => round.id === this.activeRound.id)
+        : -1;
+      if (this.settings.phase === 'voting' && activeIndex >= target) {
+        updates[`starActivities/${this.activityId}/settings/phase`] = 'showcase';
+        updates[`starActivities/${this.activityId}/settings/activeRoundId`] = '';
+      }
+
+      const viewedIndex = this.teacherViewRoundId
+        ? this.allRoundArray.findIndex(round => round.id === this.teacherViewRoundId)
+        : -1;
+      if (viewedIndex >= target) this.teacherViewRoundId = '';
+
+      await db.ref().update(updates);
+      this.desiredRoundCount = target;
+      this.showToast(target < current
+        ? `✅ 已顯示前 ${target} 輪；後續輪次與結果仍完整保留`
+        : `✅ 已調整為 ${target} 輪投票`);
+    },
+    async saveRoundTitles() {
+      const updates = {};
+      this.roundArray.forEach((round,index) => {
+        const title = (this.roundDrafts[round.id] || '').trim() || `第 ${index+1} 次任務`;
+        updates[`starActivities/${this.activityId}/rounds/${round.id}/title`] = title;
+        updates[`starActivities/${this.activityId}/rounds/${round.id}/order`] = index+1;
+      });
+      await db.ref().update(updates);
+      this.showToast('✅ 任務名稱已儲存');
+    },
+    async startRound(round) {
+      const title = (this.roundDrafts[round.id] || round.title || '').trim();
+      if (!title || title.includes('請輸入任務主題')) {
+        this.openTeacherSettings();
+        return this.showToast('請先在齒輪設定中輸入本輪任務題目');
+      }
+      const updates = {};
+      updates[`starActivities/${this.activityId}/rounds/${round.id}/title`] = title;
+      updates[`starActivities/${this.activityId}/settings/phase`] = 'voting';
+      updates[`starActivities/${this.activityId}/settings/activeRoundId`] = round.id;
+      await db.ref().update(updates);
+      this.teacherViewRoundId = '';
+      this.showTeacherSettings = false;
+      this.showToast(`✅ 已開始：${title}；其他輪次結果皆已保留`);
+    },
+    viewRoundResults(round) {
+      if (!round || !round.id) return;
+      this.teacherViewRoundId = round.id;
+      this.showTeacherSettings = false;
+      this.showToast(`📚 正在回看：${round.title || '未命名任務'}（不影響學員畫面）`);
+    },
+    stopViewingRound() {
+      this.teacherViewRoundId = '';
+      this.showToast('已回到目前課程階段');
+    },
+    voteCountByRound(roundId) {
+      return Object.keys(this.allVotes[roundId] || {}).length;
+    },
+    async saveAllowSelfVote() {
+      await db.ref(`starActivities/${this.activityId}/settings/allowSelfVote`).set(!!this.localAllowSelfVote);
+      this.showToast('✅ 投票規則已更新');
+    },
+    clearRoundVotes(roundId) {
+      this.askConfirm('確定清空本輪所有票數與投票者名單？此動作無法復原。', async () => {
+        await db.ref(`starActivities/${this.activityId}/votes/${roundId}`).remove();
+        this.showToast('🗑️ 本輪票數已清空');
+      });
+    },
+    deleteEntry(entry) {
+      const label = `${this.formatHeroTags(entry)} ${entry.name || '未填姓名'}`;
+      this.askConfirm(`確定刪除「${label}」這筆 STAR？系統也會一併移除此學員投出的票，以及其他人投給他的票。此動作無法復原。`, async () => {
+        const updates = {};
+        updates[`starActivities/${this.activityId}/entries/${entry.id}`] = null;
+        Object.entries(this.allVotes || {}).forEach(([roundId, roundVotes]) => {
+          Object.entries(roundVotes || {}).forEach(([voterKey, vote]) => {
+            if (voterKey === entry.id || (vote && (vote.voterId === entry.id || vote.candidateId === entry.id))) {
+              updates[`starActivities/${this.activityId}/votes/${roundId}/${voterKey}`] = null;
+            }
+          });
+        });
+        await db.ref().update(updates);
+        if (this.voterModal.candidateId === entry.id) this.voterModal.show = false;
+        this.showToast('🗑️ 學員案例與相關票數已刪除');
+      });
+    },
+    openVoters(result) {
+      const voters = Object.values(this.teacherDisplayVotes || {})
+        .filter(v => v && v.candidateId === result.id)
+        .sort((a,b) => (a.voterName || '').localeCompare(b.voterName || '', 'zh-Hant'));
+      this.voterModal = {
+        show:true,
+        candidateId:result.id,
+        candidateName:result.name || '未填姓名',
+        heroTagsText:this.formatHeroTags(result),
+        voters
+      };
+    },
+    async saveMyEntry() {
+      if (this.settings.phase !== 'compose') return this.showToast('目前已鎖定，不能修改資料');
+      const e = this.myEntry;
+      const firstHeroTag = this.cleanHeroTagText(e.heroTags[0]);
+      const secondHeroTag = this.cleanHeroTagText(e.heroTags[1]);
+      const thirdHeroTag = this.cleanHeroTagText(e.heroTags[2]);
+      const heroTagTexts = firstHeroTag
+        ? [firstHeroTag, ...(secondHeroTag ? [secondHeroTag, ...(thirdHeroTag ? [thirdHeroTag] : [])] : [])]
+        : [];
+      const heroTags = heroTagTexts.map(tag => `#${tag}`);
+      if (!e.name.trim() || !e.st.trim() || !e.a.trim() || !e.r.trim() || !firstHeroTag) {
+        return this.showToast('請完整填寫姓名、ST、A、R 與第 1 個英雄稱號');
+      }
+      const existing = this.entries[this.studentId] || {};
+      const now = Date.now();
+      await db.ref(`starActivities/${this.activityId}/entries/${this.studentId}`).set({
+        name:e.name.trim(),
+        st:e.st.trim(),
+        a:e.a.trim(),
+        r:e.r.trim(),
+        heroTag:heroTags[0],
+        heroTags,
+        createdAt:existing.createdAt || now,
+        updatedAt:now
+      });
+      this.myEntry.heroTags = [heroTagTexts[0] || '', heroTagTexts[1] || '', heroTagTexts[2] || ''];
+      this.myEntrySavedAt = now;
+      this.showToast('✅ 你的 STAR 已安全儲存');
+    },
+    openCandidateDetail(entry) {
+      this.candidateModal = { show:true, entry:{ ...entry } };
+    },
+    async voteFromCandidateModal() {
+      if (!this.candidateModal.entry) return;
+      await this.castVote(this.candidateModal.entry);
+      this.candidateModal.show = false;
+    },
+    syncMyVoteFromData() {
+      if (!this.settings.activeRoundId || !this.studentId) {
+        this.myVoteCandidateId = '';
+        return;
+      }
+      const vote = (((this.allVotes || {})[this.settings.activeRoundId] || {})[this.studentId]);
+      this.myVoteCandidateId = vote && vote.candidateId ? vote.candidateId : '';
+    },
+    async castVote(entry) {
+      if (this.settings.phase !== 'voting' || !this.activeRound) return;
+      const voter = this.entries[this.studentId];
+      if (!voter || !voter.name) return this.showToast('找不到你的姓名資料，請先完成自己的 STAR');
+      if (this.settings.allowSelfVote === false && entry.id === this.studentId) return;
+      await db.ref(`starActivities/${this.activityId}/votes/${this.activeRound.id}/${this.studentId}`).set({
+        voterId:this.studentId,
+        voterName:voter.name,
+        candidateId:entry.id,
+        candidateName:entry.name || '',
+        candidateHeroTag:this.heroTagLabels(entry)[0] || '',
+        candidateHeroTags:this.heroTagLabels(entry),
+        votedAt:Date.now()
+      });
+      this.myVoteCandidateId = entry.id;
+      this.showToast(`✅ 已投給 ${this.formatHeroTags(entry)} ${entry.name || ''}`);
+    },
+    async removeMyVote() {
+      if (!this.activeRound) return;
+      await db.ref(`starActivities/${this.activityId}/votes/${this.activeRound.id}/${this.studentId}`).remove();
+      this.myVoteCandidateId = '';
+      this.showToast('已取消本輪投票');
+    },
+    resultBarWidth(count) {
+      return `${Math.max(0,(count / this.maxRoundCount) * 100)}%`;
+    },
+    cleanHeroTagText(value) {
+      return String(value || '').replace(/[＃#]+/g,'').replace(/\s+/g,' ').trim();
+    },
+    heroTagTexts(source) {
+      let raw = [];
+      if (Array.isArray(source)) raw = source;
+      else if (source && Array.isArray(source.heroTags)) raw = source.heroTags;
+      else if (source && source.heroTags && typeof source.heroTags === 'object') raw = Object.values(source.heroTags);
+      else if (source && typeof source === 'object' && source.heroTag) raw = [source.heroTag];
+      else if (source !== undefined && source !== null) raw = [source];
+      const unique = [];
+      raw.forEach(value => {
+        const clean = this.cleanHeroTagText(value);
+        if (clean && !unique.includes(clean)) unique.push(clean);
+      });
+      return unique.slice(0,3);
+    },
+    heroTagLabels(source) {
+      const labels = this.heroTagTexts(source).map(tag => `#${tag}`);
+      return labels.length ? labels : ['#未命名稱號'];
+    },
+    formatHeroTags(source, fallback=true) {
+      const tags = this.heroTagTexts(source).map(tag => `#${tag}`);
+      return tags.length ? tags.join('　') : (fallback ? '#未命名稱號' : '');
+    },
+    sanitizeHeroTagInput(index) {
+      const current = this.myEntry.heroTags[index] || '';
+      this.myEntry.heroTags[index] = String(current).replace(/[＃#]+/g,'');
+    },
+    trimHeroTagInput(index) {
+      this.myEntry.heroTags[index] = this.cleanHeroTagText(this.myEntry.heroTags[index]);
+    },
+    summarize(text,max=70) {
+      const clean = String(text || '').replace(/\s+/g,' ').trim();
+      return clean.length > max ? clean.slice(0,max) + '…' : (clean || '尚未填寫摘要');
+    },
+    formatTime(value) {
+      if (!value) return '—';
+      return new Date(value).toLocaleString('zh-TW',{hour12:false});
+    },
+    exportActivity() {
+      const payload = {
+        exportedAt:new Date().toISOString(),
+        activityId:this.activityId,
+        settings:this.settings,
+        entries:this.entries,
+        rounds:this.rounds,
+        votes:this.allVotes
+      };
+      const blob = new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `STAR活動_${this.settings.title || this.activityId}_${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      this.showToast('✅ 活動資料已匯出');
+    }
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
