@@ -594,23 +594,23 @@
       <div class="card">
         <div class="form-grid">
           <div>
-            <label class="field-label">姓名</label>
+            <label class="field-label">姓名 <span style="color:#dc2626;font-size:.88rem;">＊必填</span></label>
             <input type="text" v-model.trim="myEntry.name" maxlength="30" placeholder="請輸入姓名">
           </div>
           <div>
-            <label class="field-label">ST｜情況／任務</label>
+            <label class="field-label">ST｜情況／任務 <span style="color:#dc2626;font-size:.88rem;">＊必填</span></label>
             <textarea v-model.trim="myEntry.st" maxlength="1500" placeholder="當時發生什麼事？你面對的任務或挑戰是什麼？"></textarea>
           </div>
           <div>
-            <label class="field-label">A｜行動</label>
+            <label class="field-label">A｜行動 <span style="color:#dc2626;font-size:.88rem;">＊必填</span></label>
             <textarea v-model.trim="myEntry.a" maxlength="1500" placeholder="你具體做了哪些行動？請盡量寫出步驟與做法。"></textarea>
           </div>
           <div>
-            <label class="field-label">R｜結果</label>
+            <label class="field-label">R｜結果 <span style="color:#dc2626;font-size:.88rem;">＊必填</span></label>
             <textarea v-model.trim="myEntry.r" maxlength="1500" placeholder="最後產生什麼結果？若有數字、回饋或影響，請一起寫下來。"></textarea>
           </div>
           <div>
-            <label class="field-label">英雄稱號（最多 3 個 Hashtag）</label>
+            <label class="field-label">英雄稱號（最多 3 個 Hashtag，第 1 欄必填） <span style="color:#dc2626;font-size:.88rem;">＊必填</span></label>
             <div class="auto-tag-note">
               <span style="font-size:1.2rem;line-height:1;">#</span>
               <div><strong>系統已經幫你加上 #，每格只要輸入文字即可。</strong></div>
@@ -1183,8 +1183,14 @@ createApp({
         ? [firstHeroTag, ...(secondHeroTag ? [secondHeroTag, ...(thirdHeroTag ? [thirdHeroTag] : [])] : [])]
         : [];
       const heroTags = heroTagTexts.map(tag => `#${tag}`);
-      if (!e.name.trim() || !e.st.trim() || !e.a.trim() || !e.r.trim() || !firstHeroTag) {
-        return this.showToast('請完整填寫姓名、ST、A、R 與第 1 個英雄稱號');
+      const missingFields = [];
+      if (!e.name.trim()) missingFields.push('姓名');
+      if (!e.st.trim()) missingFields.push('ST（情況／任務）');
+      if (!e.a.trim()) missingFields.push('A（行動）');
+      if (!e.r.trim()) missingFields.push('R（結果）');
+      if (!firstHeroTag) missingFields.push('第 1 個 Hashtag');
+      if (missingFields.length) {
+        return this.showToast(`⚠️ 尚未填寫：${missingFields.join('、')}。必填欄位完成後才能儲存。`);
       }
       const existing = this.entries[this.studentId] || {};
       const now = Date.now();
