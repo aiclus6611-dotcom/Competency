@@ -590,7 +590,7 @@
 
     <!-- 第一階段：自己填寫 -->
     <section v-if="settings.phase==='compose'">
-      <div class="notice notice-blue"><strong>第一階段｜寫下自己的 STAR</strong><br>目前只有你看得到自己的內容；請完成後按「儲存我的 STAR」。</div>
+      <div class="notice notice-blue"><strong>寫下自己的 STAR</strong><br>請完成後按「儲存我的 STAR」。</div>
       <div class="card">
         <div class="form-grid">
           <div>
@@ -648,7 +648,7 @@
 
     <!-- 第二階段：全班觀看 -->
     <section v-else-if="settings.phase==='showcase'">
-      <div class="notice notice-green"><strong>第二階段｜全班案例展示</strong><br>現在可以閱讀所有人的 STAR；本階段只能觀看，不能修改。</div>
+      <div class="notice notice-green"><strong>第二階段｜全班案例展示</strong><br>請逐一閱讀所有人的 STAR</div>
       <div v-if="entryArray.length" class="entry-grid">
         <article v-for="entry in entryArray" :key="entry.id" class="card entry-card">
           <div class="hero-tag"><span v-for="tag in heroTagLabels(entry)" :key="tag" class="hero-tag-chip">{{ tag }}</span></div>
@@ -665,7 +665,7 @@
     <section v-else-if="settings.phase==='voting'">
       <div class="notice notice-amber">
         <strong>任務投票｜{{ activeRound ? activeRound.title : '等待講師設定任務' }}</strong><br>
-        請選出你認為最適合接任這項任務的人。每人本輪可投 1 票，講師會知道票是誰投的，以便邀請你說明理由。
+        請選出你認為最適合接任這項任務的人。每人本輪可投 1 票
       </div>
 
       <div v-if="!mySavedEntry || !mySavedEntry.name" class="notice notice-blue">系統找不到你的姓名資料。請使用原本填寫 STAR 的同一台裝置進入，或請講師暫時切回第一階段讓你補填。</div>
@@ -792,7 +792,7 @@ createApp({
       return '請選擇活動階段。';
     },
     studentPhaseTitle() {
-      if (this.settings.phase === 'compose') return '第一階段：只看得到自己的內容';
+      if (this.settings.phase === 'compose') return '';
       if (this.settings.phase === 'showcase') return '第二階段：觀看全班案例';
       if (this.settings.phase === 'voting') return '任務票選進行中';
       return '等待講師開始';
