@@ -198,6 +198,12 @@
     }
     .candidate:hover { border-color:#7dd3fc; transform:translateY(-1px); }
     .candidate.selected { border-color:var(--primary); background:#f0f9ff; box-shadow:0 0 0 3px rgba(14,165,233,.1); }
+    .candidate.selected .selected-vote-note {
+      margin-top:10px; padding:10px 12px; border-radius:11px; background:#e0f2fe; border:1px solid #7dd3fc;
+      color:#0369a1; font-weight:900; line-height:1.5;
+    }
+    .btn-vote-toggle { background:#fff; color:#b91c1c; border:1px solid #fecaca; }
+    .btn-vote-toggle:hover:not(:disabled) { background:#fff1f2; filter:none; }
     .candidate.locked { opacity:.46; filter:grayscale(.78); background:#f8fafc; }
     .candidate.locked:hover { border-color:#e2e8f0; transform:none; }
     .candidate.locked .candidate-open { cursor:pointer; }
@@ -372,9 +378,11 @@
       <div class="star-block"><b>R｜結果</b><p>{{ candidateModal.entry.r || '—' }}</p></div>
       <div class="modal-actions">
         <button class="btn btn-ghost" @click="candidateModal.show=false">先不投</button>
-        <button class="btn btn-primary" @click="voteFromCandidateModal"
-                :disabled="!!myVoteCandidateId"
-                >{{ myVoteCandidateId===candidateModal.entry.id ? '✓ 本輪已投給這位' : (myVoteCandidateId ? '本輪投票已鎖定' : '投給這位') }}</button>
+        <button class="btn" :class="myVoteCandidateId===candidateModal.entry.id ? 'btn-vote-toggle' : 'btn-primary'"
+                @click="voteFromCandidateModal"
+                :disabled="!!myVoteCandidateId && myVoteCandidateId!==candidateModal.entry.id">
+          {{ myVoteCandidateId===candidateModal.entry.id ? '取消投給這位（再按一次）' : (myVoteCandidateId ? '本輪投票已鎖定' : '投給這位') }}
+        </button>
       </div>
     </div>
   </div>
@@ -695,21 +703,22 @@
             <div class="summary">{{ summarize(entry.st,80) }}</div>
             <div class="candidate-view-hint">點英雄稱號或姓名，查看完整 STAR</div>
           </button>
-          <div v-if="myVoteCandidateId===entry.id" style="margin-top:10px;color:#0284c7;font-weight:900;">✓ 你目前投給這位</div>
+          <div v-if="myVoteCandidateId===entry.id" class="selected-vote-note">
+            ✓ 你已投給這位<br><span class="small">要取消時，直接再按一次下方的「取消投給這位」。</span>
+          </div>
           <div class="candidate-actions">
             <button class="btn btn-ghost" @click="openCandidateDetail(entry)">查看完整 STAR</button>
-            <button class="btn btn-primary" @click="castVote(entry)" :disabled="!!myVoteCandidateId">
-              {{ myVoteCandidateId===entry.id ? '✓ 本輪已投給這位' : (myVoteCandidateId ? '已鎖定' : '投給這位') }}
+            <button class="btn"
+                    :class="myVoteCandidateId===entry.id ? 'btn-vote-toggle' : 'btn-primary'"
+                    @click="castVote(entry)"
+                    :disabled="!!myVoteCandidateId && myVoteCandidateId!==entry.id">
+              {{ myVoteCandidateId===entry.id ? '取消投給這位（再按一次）' : (myVoteCandidateId ? '已鎖定' : '投給這位') }}
             </button>
           </div>
         </article>
       </div>
       <div v-else class="empty">目前沒有可投票的候選人，或講師尚未開啟本輪。</div>
 
-      <div v-if="myVoteCandidateId" class="save-strip">
-        <div><strong style="color:#16a34a;">✓ 本輪投票已記錄，只保留這 1 票</strong><div class="muted small">其他人已反灰鎖定；若要改投，請先取消本輪投票。</div></div>
-        <button class="btn btn-ghost" @click="removeMyVote">取消本輪投票</button>
-      </div>
     </section>
 
     <section v-else class="card empty">等待講師開始活動。</section>
@@ -1439,8 +1448,11 @@ createApp({
       if (!voter || !this.entryIsComplete(voter)) return this.showToast('找不到完整的 STAR 資料，請先完成自己的填寫');
       if (this.settings.allowSelfVote === false && entry.id === this.studentId) return;
       if (this.myVoteCandidateId) {
-        if (this.myVoteCandidateId === entry.id) return this.showToast('✓ 本輪已投給這位，不會重複計票');
-        return this.showToast('本輪只能保留 1 票；如要改投，請先取消目前投票');
+        if (this.myVoteCandidateId === entry.id) {
+          await this.removeMyVote();
+          return;
+        }
+        return this.showToast('本輪只能保留 1 票；請先在已選的那一位按「取消投給這位」');
       }
       await db.ref(`starActivities/${this.activityId}/votes/${this.activeRound.id}/${this.studentId}`).set({
         voterId:this.studentId,
@@ -1458,7 +1470,7 @@ createApp({
       if (!this.activeRound) return;
       await db.ref(`starActivities/${this.activityId}/votes/${this.activeRound.id}/${this.studentId}`).remove();
       this.myVoteCandidateId = '';
-      this.showToast('已取消本輪投票');
+      this.showToast('已取消本輪投票，可重新選擇');
     },
     resultBarWidth(count) {
       return `${Math.max(0,(count / this.maxRoundCount) * 100)}%`;
