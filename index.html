@@ -187,6 +187,10 @@
       box-shadow:0 10px 30px rgba(15,23,42,.12);
     }
     .save-status { color:var(--success); font-weight:800; font-size:.9rem; }
+    .save-status.is-saving { color:#0284c7; }
+    .save-status.is-draft { color:#b45309; }
+    .save-status.is-error { color:var(--danger); }
+    .auto-save-strip { justify-content:flex-start; }
     .candidate-list { display:grid; gap:12px; }
     .candidate {
       border:2px solid #e2e8f0; background:#fff; border-radius:16px; padding:14px; text-align:left; width:100%;
@@ -194,6 +198,10 @@
     }
     .candidate:hover { border-color:#7dd3fc; transform:translateY(-1px); }
     .candidate.selected { border-color:var(--primary); background:#f0f9ff; box-shadow:0 0 0 3px rgba(14,165,233,.1); }
+    .candidate.locked { opacity:.46; filter:grayscale(.78); background:#f8fafc; }
+    .candidate.locked:hover { border-color:#e2e8f0; transform:none; }
+    .candidate.locked .candidate-open { cursor:pointer; }
+    .candidate.locked .candidate-view-hint { color:#64748b; }
     .candidate-open {
       display:block; width:100%; padding:3px; border:0; background:transparent; text-align:left; border-radius:12px;
       color:inherit;
@@ -364,7 +372,9 @@
       <div class="star-block"><b>R｜結果</b><p>{{ candidateModal.entry.r || '—' }}</p></div>
       <div class="modal-actions">
         <button class="btn btn-ghost" @click="candidateModal.show=false">先不投</button>
-        <button class="btn btn-primary" @click="voteFromCandidateModal">投給這位</button>
+        <button class="btn btn-primary" @click="voteFromCandidateModal"
+                :disabled="!!myVoteCandidateId"
+                >{{ myVoteCandidateId===candidateModal.entry.id ? '✓ 本輪已投給這位' : (myVoteCandidateId ? '本輪投票已鎖定' : '投給這位') }}</button>
       </div>
     </div>
   </div>
@@ -590,24 +600,24 @@
 
     <!-- 第一階段：自己填寫 -->
     <section v-if="settings.phase==='compose'">
-      <div class="notice notice-blue"><strong>寫下自己的 STAR</strong><br>請完成後按「儲存我的 STAR」。</div>
+      <div class="notice notice-blue"><strong>寫下自己的 STAR</strong><br>輸入內容後會自動儲存，不需要再按送出或儲存。</div>
       <div class="card">
         <div class="form-grid">
           <div>
             <label class="field-label">姓名 <span style="color:#dc2626;font-size:.88rem;">＊必填</span></label>
-            <input type="text" v-model.trim="myEntry.name" maxlength="30" placeholder="請輸入姓名">
+            <input type="text" v-model="myEntry.name" maxlength="30" @blur="flushMyEntryAutoSave" placeholder="請輸入姓名">
           </div>
           <div>
             <label class="field-label">ST｜情況／任務 <span style="color:#dc2626;font-size:.88rem;">＊必填</span></label>
-            <textarea v-model.trim="myEntry.st" maxlength="1500" placeholder="當時發生什麼事？你面對的任務或挑戰是什麼？"></textarea>
+            <textarea v-model="myEntry.st" maxlength="1500" @blur="flushMyEntryAutoSave" placeholder="當時發生什麼事？你面對的任務或挑戰是什麼？"></textarea>
           </div>
           <div>
             <label class="field-label">A｜行動 <span style="color:#dc2626;font-size:.88rem;">＊必填</span></label>
-            <textarea v-model.trim="myEntry.a" maxlength="1500" placeholder="你具體做了哪些行動？請盡量寫出步驟與做法。"></textarea>
+            <textarea v-model="myEntry.a" maxlength="1500" @blur="flushMyEntryAutoSave" placeholder="你具體做了哪些行動？請盡量寫出步驟與做法。"></textarea>
           </div>
           <div>
             <label class="field-label">R｜結果 <span style="color:#dc2626;font-size:.88rem;">＊必填</span></label>
-            <textarea v-model.trim="myEntry.r" maxlength="1500" placeholder="最後產生什麼結果？若有數字、回饋或影響，請一起寫下來。"></textarea>
+            <textarea v-model="myEntry.r" maxlength="1500" @blur="flushMyEntryAutoSave" placeholder="最後產生什麼結果？若有數字、回饋或影響，請一起寫下來。"></textarea>
           </div>
           <div>
             <label class="field-label">英雄稱號（最多 3 個 Hashtag，第 1 欄必填） <span style="color:#dc2626;font-size:.88rem;">＊必填</span></label>
@@ -619,19 +629,19 @@
               <div class="tag-input-row">
                 <span class="tag-prefix">#</span>
                 <input type="text" v-model="myEntry.heroTags[0]" maxlength="30"
-                       @input="sanitizeHeroTagInput(0)" @blur="trimHeroTagInput(0)"
+                       @input="sanitizeHeroTagInput(0)" @blur="trimHeroTagInput(0); flushMyEntryAutoSave()"
                        placeholder="第 1 個稱號（必填），例如：#滅火專家、#奧客終結者">
               </div>
               <div v-if="showSecondHeroTagInput" class="tag-input-row">
                 <span class="tag-prefix">#</span>
                 <input type="text" v-model="myEntry.heroTags[1]" maxlength="30"
-                       @input="sanitizeHeroTagInput(1)" @blur="trimHeroTagInput(1)"
+                       @input="sanitizeHeroTagInput(1)" @blur="trimHeroTagInput(1); flushMyEntryAutoSave()"
                        placeholder="第 2 個稱號（選填）">
               </div>
               <div v-if="showThirdHeroTagInput" class="tag-input-row">
                 <span class="tag-prefix">#</span>
                 <input type="text" v-model="myEntry.heroTags[2]" maxlength="30"
-                       @input="sanitizeHeroTagInput(2)" @blur="trimHeroTagInput(2)"
+                       @input="sanitizeHeroTagInput(2)" @blur="trimHeroTagInput(2); flushMyEntryAutoSave()"
                        placeholder="第 3 個稱號（選填）">
               </div>
             </div>
@@ -639,9 +649,15 @@
             <div class="tag-preview"><strong>顯示預覽：</strong>{{ myHeroTagPreview || '尚未輸入稱號' }}</div>
           </div>
         </div>
-        <div class="save-strip">
-          <div><div class="save-status" v-if="myEntrySavedAt">✓ 已儲存：{{ formatTime(myEntrySavedAt) }}</div><div class="muted small" v-else>尚未儲存</div></div>
-          <button class="btn btn-primary" @click="saveMyEntry">儲存我的 STAR</button>
+        <div class="save-strip auto-save-strip">
+          <div>
+            <div class="save-status" :class="{
+              'is-saving':myEntryAutoSaveState==='saving' || myEntryAutoSaveState==='typing',
+              'is-draft':myEntryAutoSaveState==='draft',
+              'is-error':myEntryAutoSaveState==='error'
+            }">{{ myEntryAutoSaveMessage }}</div>
+            <div class="muted small" style="margin-top:3px;">內容會先保存在此裝置，再自動同步到活動資料庫。</div>
+          </div>
         </div>
       </div>
     </section>
@@ -668,10 +684,11 @@
         請選出你認為最適合接任這項任務的人。每人本輪可投 1 票
       </div>
 
-      <div v-if="!mySavedEntry || !mySavedEntry.name" class="notice notice-blue">系統找不到你的姓名資料。請使用原本填寫 STAR 的同一台裝置進入，或請講師暫時切回第一階段讓你補填。</div>
+      <div v-if="!mySavedEntry || !entryIsComplete(mySavedEntry)" class="notice notice-blue">系統找不到完整的 STAR 資料。請使用原本填寫的同一台裝置進入，或請講師暫時切回第一階段讓你補填。</div>
 
       <div v-if="activeRound && eligibleCandidates.length" class="candidate-list">
-        <article v-for="entry in eligibleCandidates" :key="entry.id" class="candidate" :class="{selected:myVoteCandidateId===entry.id}">
+        <article v-for="entry in eligibleCandidates" :key="entry.id" class="candidate"
+                 :class="{selected:myVoteCandidateId===entry.id, locked:myVoteCandidateId && myVoteCandidateId!==entry.id}">
           <button class="candidate-open" @click="openCandidateDetail(entry)" title="查看完整 STAR">
             <div class="tag">{{ formatHeroTags(entry) }}</div>
             <div class="name">{{ entry.name || '未填姓名' }}</div>
@@ -681,14 +698,16 @@
           <div v-if="myVoteCandidateId===entry.id" style="margin-top:10px;color:#0284c7;font-weight:900;">✓ 你目前投給這位</div>
           <div class="candidate-actions">
             <button class="btn btn-ghost" @click="openCandidateDetail(entry)">查看完整 STAR</button>
-            <button class="btn btn-primary" @click="castVote(entry)">{{ myVoteCandidateId===entry.id ? '已投給這位' : '投給這位' }}</button>
+            <button class="btn btn-primary" @click="castVote(entry)" :disabled="!!myVoteCandidateId">
+              {{ myVoteCandidateId===entry.id ? '✓ 本輪已投給這位' : (myVoteCandidateId ? '已鎖定' : '投給這位') }}
+            </button>
           </div>
         </article>
       </div>
       <div v-else class="empty">目前沒有可投票的候選人，或講師尚未開啟本輪。</div>
 
       <div v-if="myVoteCandidateId" class="save-strip">
-        <div><strong style="color:#16a34a;">✓ 本輪投票已記錄</strong><div class="muted small">在講師切換下一階段前，你仍可改投其他人。</div></div>
+        <div><strong style="color:#16a34a;">✓ 本輪投票已記錄，只保留這 1 票</strong><div class="muted small">其他人已反灰鎖定；若要改投，請先取消本輪投票。</div></div>
         <button class="btn btn-ghost" @click="removeMyVote">取消本輪投票</button>
       </div>
     </section>
@@ -737,6 +756,11 @@ createApp({
       allVotes: {},
       myEntry: { name:'', st:'', a:'', r:'', heroTags:['','',''] },
       myEntrySavedAt: 0,
+      myEntryAutoSaveState: 'idle',
+      myEntryAutoSaveMessage: '開始輸入後會自動儲存',
+      myEntryInitialized: false,
+      isApplyingRemoteEntry: false,
+      lastSavedEntrySignature: '',
       myVoteCandidateId: '',
       desiredRoundCount: 3,
       roundDrafts: {},
@@ -753,7 +777,7 @@ createApp({
   computed: {
     entryArray() {
       return Object.keys(this.entries || {}).map(id => ({ id, ...this.entries[id] }))
-        .filter(x => x.name || x.st || x.a || x.r || x.heroTag || x.heroTags)
+        .filter(x => this.entryIsComplete(x))
         .sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
     },
     allRoundArray() {
@@ -848,6 +872,15 @@ createApp({
       return this.entryArray;
     }
   },
+  watch: {
+    myEntry: {
+      deep: true,
+      handler() {
+        if (this.currentView !== 'student' || !this.myEntryInitialized || this.isApplyingRemoteEntry) return;
+        this.scheduleMyEntryAutoSave();
+      }
+    }
+  },
   mounted() {
     const params = new URLSearchParams(location.search);
     const activityId = params.get('activity');
@@ -872,9 +905,14 @@ createApp({
       this.studentId = id;
     }
 
+    this._beforeUnloadHandler = () => this.saveMyEntryDraftLocally();
+    window.addEventListener('beforeunload', this._beforeUnloadHandler);
     this.attachActivityListeners();
   },
   beforeUnmount() {
+    clearTimeout(this._entryAutoSaveTimer);
+    this.saveMyEntryDraftLocally();
+    if (this._beforeUnloadHandler) window.removeEventListener('beforeunload', this._beforeUnloadHandler);
     this.listeners.forEach(({ref,event,callback}) => ref.off(event,callback));
   },
   methods: {
@@ -1012,17 +1050,52 @@ createApp({
       const entriesRef = db.ref(`starActivities/${this.activityId}/entries`);
       this.attach(entriesRef,'value',snap => {
         this.entries = snap.val() || {};
-        if (this.currentView === 'student' && this.entries[this.studentId]) {
-          const e = this.entries[this.studentId];
-          const tagTexts = this.heroTagTexts(e);
-          this.myEntry = {
-            name:e.name || '', st:e.st || '', a:e.a || '', r:e.r || '',
-            heroTags:[tagTexts[0] || '', tagTexts[1] || '', tagTexts[2] || '']
-          };
-          this.myEntrySavedAt = e.updatedAt || e.createdAt || 0;
-        } else if (this.currentView === 'student') {
-          this.myEntry = { name:'', st:'', a:'', r:'', heroTags:['','',''] };
-          this.myEntrySavedAt = 0;
+        if (this.currentView !== 'student') return;
+
+        const remoteEntry = this.entries[this.studentId] || null;
+        const remoteUpdatedAt = remoteEntry ? (remoteEntry.updatedAt || remoteEntry.createdAt || 0) : 0;
+        const remoteForm = remoteEntry ? this.entryToForm(remoteEntry) : this.emptyEntryForm();
+        const remoteSignature = this.entryFormSignature(remoteForm);
+
+        // 只在第一次進入時把資料放進表單。之後全班任何人更新資料，都不再覆蓋學員正在輸入的內容。
+        if (!this.myEntryInitialized) {
+          const localDraft = this.readMyEntryDraftLocally();
+          const useLocalDraft = localDraft && localDraft.localSavedAt >= remoteUpdatedAt;
+          const initialForm = useLocalDraft ? this.entryToForm(localDraft) : remoteForm;
+
+          this.isApplyingRemoteEntry = true;
+          this.myEntry = initialForm;
+          this.myEntrySavedAt = remoteUpdatedAt;
+          this.lastSavedEntrySignature = remoteSignature;
+          this.myEntryInitialized = true;
+          this.myEntryAutoSaveState = useLocalDraft ? 'draft' : (remoteEntry ? 'saved' : 'idle');
+          this.myEntryAutoSaveMessage = useLocalDraft
+            ? '已復原尚未同步的輸入內容，正在準備自動儲存…'
+            : (remoteEntry ? `✓ 已載入並儲存：${this.formatTime(remoteUpdatedAt)}` : '開始輸入後會自動儲存');
+
+          this.$nextTick(() => {
+            this.isApplyingRemoteEntry = false;
+            if (useLocalDraft) this.scheduleMyEntryAutoSave(120);
+          });
+          return;
+        }
+
+        // 自動儲存完成後，僅更新狀態；除非本機完全沒有未儲存變更，否則不以遠端資料回填表單。
+        const currentSignature = this.entryFormSignature(this.myEntry);
+        if (remoteEntry && remoteSignature === currentSignature) {
+          this.lastSavedEntrySignature = remoteSignature;
+          this.myEntrySavedAt = remoteUpdatedAt;
+          this.myEntryAutoSaveState = this.entryIsComplete(remoteEntry) ? 'saved' : 'draft';
+          this.myEntryAutoSaveMessage = this.entryIsComplete(remoteEntry)
+            ? `✓ 已自動儲存：${this.formatTime(remoteUpdatedAt)}`
+            : `✓ 草稿已自動儲存：${this.formatTime(remoteUpdatedAt)}`;
+          this.saveMyEntryDraftLocally(remoteUpdatedAt);
+        } else if (remoteEntry && currentSignature === this.lastSavedEntrySignature && !this._entryAutoSaveTimer && !this._entrySaveInFlight) {
+          this.isApplyingRemoteEntry = true;
+          this.myEntry = remoteForm;
+          this.lastSavedEntrySignature = remoteSignature;
+          this.myEntrySavedAt = remoteUpdatedAt;
+          this.$nextTick(() => { this.isApplyingRemoteEntry = false; });
         }
       });
 
@@ -1173,40 +1246,176 @@ createApp({
         voters
       };
     },
-    async saveMyEntry() {
-      if (this.settings.phase !== 'compose') return this.showToast('目前已鎖定，不能修改資料');
-      const e = this.myEntry;
-      const firstHeroTag = this.cleanHeroTagText(e.heroTags[0]);
-      const secondHeroTag = this.cleanHeroTagText(e.heroTags[1]);
-      const thirdHeroTag = this.cleanHeroTagText(e.heroTags[2]);
-      const heroTagTexts = firstHeroTag
-        ? [firstHeroTag, ...(secondHeroTag ? [secondHeroTag, ...(thirdHeroTag ? [thirdHeroTag] : [])] : [])]
-        : [];
-      const heroTags = heroTagTexts.map(tag => `#${tag}`);
-      const missingFields = [];
-      if (!e.name.trim()) missingFields.push('姓名');
-      if (!e.st.trim()) missingFields.push('ST（情況／任務）');
-      if (!e.a.trim()) missingFields.push('A（行動）');
-      if (!e.r.trim()) missingFields.push('R（結果）');
-      if (!firstHeroTag) missingFields.push('第 1 個 Hashtag');
-      if (missingFields.length) {
-        return this.showToast(`⚠️ 尚未填寫：${missingFields.join('、')}。必填欄位完成後才能儲存。`);
+    emptyEntryForm() {
+      return { name:'', st:'', a:'', r:'', heroTags:['','',''] };
+    },
+    entryToForm(source) {
+      const tagTexts = this.heroTagTexts(source || {});
+      return {
+        name:String((source && source.name) || ''),
+        st:String((source && source.st) || ''),
+        a:String((source && source.a) || ''),
+        r:String((source && source.r) || ''),
+        heroTags:[tagTexts[0] || '', tagTexts[1] || '', tagTexts[2] || '']
+      };
+    },
+    normalizedEntryForm(source = this.myEntry) {
+      const form = source || this.emptyEntryForm();
+      const tags = Array.isArray(form.heroTags) ? form.heroTags : [];
+      return {
+        name:String(form.name || ''),
+        st:String(form.st || ''),
+        a:String(form.a || ''),
+        r:String(form.r || ''),
+        heroTags:[
+          this.cleanHeroTagText(tags[0]),
+          this.cleanHeroTagText(tags[1]),
+          this.cleanHeroTagText(tags[2])
+        ]
+      };
+    },
+    entryFormSignature(source = this.myEntry) {
+      return JSON.stringify(this.normalizedEntryForm(source));
+    },
+    entryIsComplete(source) {
+      if (!source) return false;
+      const form = this.normalizedEntryForm(this.entryToForm(source));
+      return !!(form.name.trim() && form.st.trim() && form.a.trim() && form.r.trim() && form.heroTags[0]);
+    },
+    entryHasAnyContent(source = this.myEntry) {
+      const form = this.normalizedEntryForm(source);
+      return !!(form.name.trim() || form.st.trim() || form.a.trim() || form.r.trim() || form.heroTags.some(Boolean));
+    },
+    myEntryDraftStorageKey() {
+      return `star_entry_draft_${this.activityId}_${this.studentId}`;
+    },
+    readMyEntryDraftLocally() {
+      try {
+        const raw = localStorage.getItem(this.myEntryDraftStorageKey());
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch (error) {
+        return null;
       }
-      const existing = this.entries[this.studentId] || {};
-      const now = Date.now();
-      await db.ref(`starActivities/${this.activityId}/entries/${this.studentId}`).set({
-        name:e.name.trim(),
-        st:e.st.trim(),
-        a:e.a.trim(),
-        r:e.r.trim(),
-        heroTag:heroTags[0],
-        heroTags,
-        createdAt:existing.createdAt || now,
-        updatedAt:now
-      });
-      this.myEntry.heroTags = [heroTagTexts[0] || '', heroTagTexts[1] || '', heroTagTexts[2] || ''];
-      this.myEntrySavedAt = now;
-      this.showToast('✅ 你的 STAR 已安全儲存');
+    },
+    saveMyEntryDraftLocally(savedAt = 0) {
+      if (this.currentView !== 'student' || !this.activityId || !this.studentId || !this.myEntryInitialized) return;
+      try {
+        const form = this.normalizedEntryForm(this.myEntry);
+        if (!this.entryHasAnyContent(form)) {
+          localStorage.removeItem(this.myEntryDraftStorageKey());
+          return;
+        }
+        localStorage.setItem(this.myEntryDraftStorageKey(), JSON.stringify({
+          ...form,
+          localSavedAt:savedAt || Date.now()
+        }));
+      } catch (error) {
+        // localStorage 無法使用時，仍會繼續嘗試同步 Firebase。
+      }
+    },
+    scheduleMyEntryAutoSave(delay = 650) {
+      if (this.settings.phase !== 'compose') return;
+      this.saveMyEntryDraftLocally();
+      clearTimeout(this._entryAutoSaveTimer);
+      this.myEntryAutoSaveState = 'typing';
+      this.myEntryAutoSaveMessage = '正在輸入…稍後會自動儲存';
+      this._entryAutoSaveTimer = setTimeout(() => {
+        this._entryAutoSaveTimer = null;
+        this.persistMyEntry();
+      }, delay);
+    },
+    flushMyEntryAutoSave() {
+      if (this.currentView !== 'student' || !this.myEntryInitialized || this.settings.phase !== 'compose') return;
+      clearTimeout(this._entryAutoSaveTimer);
+      this._entryAutoSaveTimer = null;
+      this.persistMyEntry();
+    },
+    async persistMyEntry() {
+      if (this.settings.phase !== 'compose' || !this.myEntryInitialized) return;
+      if (this._entrySaveInFlight) {
+        this._entrySaveQueued = true;
+        return;
+      }
+
+      const form = this.normalizedEntryForm(this.myEntry);
+      const signature = this.entryFormSignature(form);
+      if (signature === this.lastSavedEntrySignature) {
+        const complete = this.entryIsComplete(form);
+        this.myEntryAutoSaveState = complete ? 'saved' : (this.entryHasAnyContent(form) ? 'draft' : 'idle');
+        this.myEntryAutoSaveMessage = this.myEntrySavedAt
+          ? `${complete ? '✓ 已自動儲存' : '✓ 草稿已自動儲存'}：${this.formatTime(this.myEntrySavedAt)}`
+          : '開始輸入後會自動儲存';
+        return;
+      }
+
+      this._entrySaveInFlight = true;
+      this.myEntryAutoSaveState = 'saving';
+      this.myEntryAutoSaveMessage = '正在自動儲存…';
+      try {
+        const ref = db.ref(`starActivities/${this.activityId}/entries/${this.studentId}`);
+        if (!this.entryHasAnyContent(form)) {
+          await ref.remove();
+          this.lastSavedEntrySignature = signature;
+          if (this.entryFormSignature(this.myEntry) === signature) {
+            this.myEntrySavedAt = 0;
+            this.myEntryAutoSaveState = 'idle';
+            this.myEntryAutoSaveMessage = '開始輸入後會自動儲存';
+            localStorage.removeItem(this.myEntryDraftStorageKey());
+          } else {
+            // 儲存進行中若又有新輸入，立即排入下一次同步，避免較舊內容蓋掉新內容。
+            this._entrySaveQueued = true;
+            this.myEntryAutoSaveState = 'typing';
+            this.myEntryAutoSaveMessage = '偵測到新輸入，正在繼續自動儲存…';
+            this.saveMyEntryDraftLocally();
+          }
+        } else {
+          const existing = this.entries[this.studentId] || {};
+          const now = Date.now();
+          const heroTags = form.heroTags.filter(Boolean).map(tag => `#${tag}`);
+          const complete = this.entryIsComplete(form);
+          await ref.set({
+            name:form.name,
+            st:form.st,
+            a:form.a,
+            r:form.r,
+            heroTag:heroTags[0] || '',
+            heroTags,
+            isComplete:complete,
+            createdAt:existing.createdAt || now,
+            completedAt:complete ? (existing.completedAt || now) : null,
+            updatedAt:now
+          });
+          this.lastSavedEntrySignature = signature;
+          this.myEntrySavedAt = now;
+          if (this.entryFormSignature(this.myEntry) === signature) {
+            this.myEntryAutoSaveState = complete ? 'saved' : 'draft';
+            this.myEntryAutoSaveMessage = `${complete ? '✓ 已自動儲存' : '✓ 草稿已自動儲存'}：${this.formatTime(now)}`;
+            this.saveMyEntryDraftLocally(now);
+          } else {
+            this._entrySaveQueued = true;
+            this.myEntryAutoSaveState = 'typing';
+            this.myEntryAutoSaveMessage = '偵測到新輸入，正在繼續自動儲存…';
+            this.saveMyEntryDraftLocally();
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        this.myEntryAutoSaveState = 'error';
+        this.myEntryAutoSaveMessage = '⚠️ 暫時無法同步；輸入內容仍保存在此裝置，系統會再嘗試';
+        this.saveMyEntryDraftLocally();
+      } finally {
+        this._entrySaveInFlight = false;
+        if (this._entrySaveQueued) {
+          this._entrySaveQueued = false;
+          this.persistMyEntry();
+        }
+      }
+    },
+    async saveMyEntry() {
+      // 保留舊函式名稱以相容既有呼叫；新版改由輸入即自動儲存。
+      await this.persistMyEntry();
     },
     openCandidateDetail(entry) {
       this.candidateModal = { show:true, entry:{ ...entry } };
@@ -1227,8 +1436,12 @@ createApp({
     async castVote(entry) {
       if (this.settings.phase !== 'voting' || !this.activeRound) return;
       const voter = this.entries[this.studentId];
-      if (!voter || !voter.name) return this.showToast('找不到你的姓名資料，請先完成自己的 STAR');
+      if (!voter || !this.entryIsComplete(voter)) return this.showToast('找不到完整的 STAR 資料，請先完成自己的填寫');
       if (this.settings.allowSelfVote === false && entry.id === this.studentId) return;
+      if (this.myVoteCandidateId) {
+        if (this.myVoteCandidateId === entry.id) return this.showToast('✓ 本輪已投給這位，不會重複計票');
+        return this.showToast('本輪只能保留 1 票；如要改投，請先取消目前投票');
+      }
       await db.ref(`starActivities/${this.activityId}/votes/${this.activeRound.id}/${this.studentId}`).set({
         voterId:this.studentId,
         voterName:voter.name,
