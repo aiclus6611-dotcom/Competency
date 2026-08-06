@@ -97,17 +97,19 @@
       text-align:center; padding:50px 20px; color:var(--muted); border:2px dashed #cbd5e1;
       border-radius:16px; background:rgba(255,255,255,.65);
     }
-    .phase-board {
-      background:linear-gradient(135deg,#1e293b,#0f172a); color:#fff; border-radius:20px; padding:24px;
-      box-shadow:0 14px 35px rgba(15,23,42,.22); margin-bottom:20px;
+    .teacher-stage-copy { min-width:0; flex:1 1 520px; }
+    .stage-chip-row { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:9px; }
+    .current-stage-chip {
+      display:inline-flex; align-items:center; gap:7px; max-width:100%; border-radius:999px; padding:6px 11px;
+      background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;
+      font-size:.88rem; font-weight:900; line-height:1.3; overflow-wrap:anywhere;
     }
-    .phase-board small { color:#bae6fd; font-weight:800; letter-spacing:.08em; }
-    .phase-board h2 { margin:8px 0 6px; font-size:clamp(1.65rem,4vw,2.5rem); }
-    .phase-board p { margin:0; color:#e0f2fe; line-height:1.65; }
-    .phase-pill {
-      display:inline-flex; align-items:center; border-radius:999px; padding:7px 12px; margin-top:14px;
-      background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.18); font-weight:800;
+    .current-stage-chip::before {
+      content:""; flex:0 0 7px; width:7px; height:7px; border-radius:50%; background:#0ea5e9;
+      box-shadow:0 0 0 3px rgba(14,165,233,.13);
     }
+    .current-stage-chip.vote { background:#eef2ff; color:#3730a3; border-color:#c7d2fe; }
+    .current-stage-chip.vote::before { background:#4f46e5; box-shadow:0 0 0 3px rgba(79,70,229,.12); }
     .teacher-grid { display:grid; grid-template-columns:350px 1fr; gap:20px; align-items:start; }
     .sticky { position:sticky; top:16px; }
     .section-title { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
@@ -247,9 +249,10 @@
     }
     .gear-button:hover { transform:rotate(18deg); background:#f8fafc; }
     .teacher-content-card { min-height:48vh; }
-    .teacher-stage-head { display:flex; align-items:flex-end; justify-content:space-between; gap:15px; margin-bottom:18px; flex-wrap:wrap; }
-    .teacher-stage-head h2 { margin:0; font-size:clamp(1.45rem,3vw,2rem); }
+    .teacher-stage-head { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; margin-bottom:18px; flex-wrap:wrap; }
+    .teacher-stage-head h2 { margin:0; font-size:clamp(1.45rem,3vw,2rem); overflow-wrap:anywhere; }
     .teacher-stage-head p { margin:5px 0 0; color:var(--muted); }
+    .teacher-stage-meta { margin:6px 0 0; color:var(--muted); font-size:.9rem; line-height:1.5; }
     .entry-card-teacher { padding-bottom:76px; }
     .entry-delete {
       position:absolute; right:14px; bottom:14px; padding:8px 12px; border-radius:9px; border:1px solid #fecaca;
@@ -290,9 +293,12 @@
     }
     .history-review-banner {
       display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
-      margin-bottom:15px; padding:12px 14px; border-radius:13px; background:#fffbeb; border:1px solid #fde68a; color:#92400e;
+      margin-bottom:15px; padding:13px 14px; border-radius:13px; background:#fffbeb; border:1px solid #fde68a; color:#92400e;
     }
-    .history-review-banner strong { color:#78350f; }
+    .history-review-copy { min-width:0; flex:1 1 520px; line-height:1.5; }
+    .history-review-title { color:#78350f; font-weight:950; }
+    .history-review-current { margin-top:4px; font-weight:850; }
+    .history-review-note { margin-top:2px; }
     @media (max-width:900px) {
       .teacher-grid { grid-template-columns:1fr; }
       .sticky { position:static; }
@@ -315,6 +321,12 @@
       .settings-round-actions { grid-column:2; justify-content:flex-start; }
       .settings-stage-flow { gap:6px; }
       .dock-button { padding:8px 11px; font-size:.84rem; }
+      .teacher-stage-head { align-items:stretch; gap:12px; }
+      .teacher-stage-copy { flex-basis:100%; }
+      .teacher-stage-head > .metric { margin-left:auto; min-width:108px; padding:12px; }
+      .current-stage-chip { font-size:.84rem; padding:6px 10px; }
+      .history-review-banner { align-items:stretch; }
+      .history-review-banner .btn { width:100%; }
     }
   </style>
 </head>
@@ -526,17 +538,13 @@
       </div>
     </div>
 
-    <section class="phase-board">
-      <small>目前全班所在階段</small>
-      <h2>{{ currentPhaseTitle }}</h2>
-      <p>{{ currentPhaseDescription }}</p>
-      <div class="phase-pill">目前已有 {{ entryArray.length }} 位學員完成案例</div>
-      <div v-if="teacherViewRoundId" class="phase-pill" style="margin-left:8px;background:rgba(245,158,11,.22);border-color:rgba(253,230,138,.45);">講師正在回看：{{ teacherDisplayRound ? teacherDisplayRound.title : '歷史投票結果' }}</div>
-    </section>
-
     <section v-if="!teacherViewRoundId && settings.phase==='compose'" class="card teacher-content-card">
       <div class="teacher-stage-head">
-        <div><h2>學員撰寫進度</h2><p>畫面即時顯示已儲存的 STAR；講師可刪除誤填或重複資料。</p></div>
+        <div class="teacher-stage-copy">
+          <div class="stage-chip-row"><span class="current-stage-chip">目前階段｜第一階段・個人撰寫</span></div>
+          <h2>學員撰寫進度</h2>
+          <p>畫面即時顯示已儲存的 STAR；講師可刪除誤填或重複資料。</p>
+        </div>
         <div class="metric"><strong>{{ entryArray.length }}</strong><span>已儲存案例</span></div>
       </div>
       <div v-if="entryArray.length" class="entry-grid">
@@ -554,7 +562,11 @@
 
     <section v-else-if="!teacherViewRoundId && settings.phase==='showcase'" class="card teacher-content-card">
       <div class="teacher-stage-head">
-        <div><h2>全班 STAR 案例</h2><p>英雄稱號放在每張卡片最前方；每人最多可顯示三個稱號，學員端同步唯讀展示。</p></div>
+        <div class="teacher-stage-copy">
+          <div class="stage-chip-row"><span class="current-stage-chip">目前階段｜第二階段・全班展示</span></div>
+          <h2>全班 STAR 案例</h2>
+          <p>英雄稱號放在每張卡片最前方；每人最多可顯示三個稱號，學員端同步唯讀展示。</p>
+        </div>
         <div class="metric"><strong>{{ entryArray.length }}</strong><span>展示案例</span></div>
       </div>
       <div v-if="entryArray.length" class="entry-grid">
@@ -572,13 +584,20 @@
 
     <section v-else-if="teacherDisplayRound" class="card teacher-content-card">
       <div v-if="teacherViewRoundId" class="history-review-banner">
-        <div><strong>📚 歷史結果回看</strong><div class="small" style="margin-top:3px;">這只會改變講師投影畫面，不會切換學員目前所在階段，也不會重新開放這一輪投票。</div></div>
+        <div class="history-review-copy">
+          <div class="history-review-title">📚 正在回看：{{ teacherDisplayRoundLabel }}歷史結果</div>
+          <div class="small history-review-current">學員目前仍在：{{ currentPhaseShortTitle }}</div>
+          <div class="small history-review-note">回看不會切換學員畫面，也不會重新開放這一輪投票。</div>
+        </div>
         <button class="btn btn-ghost" @click="stopViewingRound">回到目前階段</button>
       </div>
       <div class="teacher-stage-head">
-        <div>
-          <div class="muted small">{{ teacherViewRoundId ? '已保存的投票結果' : '即時投票結果' }}・已投 {{ teacherDisplayVoteCount }} 人</div>
+        <div class="teacher-stage-copy">
+          <div class="stage-chip-row">
+            <span class="current-stage-chip vote">{{ teacherViewRoundId ? '歷史結果' : '投票進行中' }}｜{{ teacherDisplayRoundLabel }}</span>
+          </div>
           <h2>{{ teacherDisplayRound.title || '未命名任務' }}</h2>
+          <div class="teacher-stage-meta">{{ teacherViewRoundId ? '已保存結果' : '即時投票結果' }}・已投 {{ teacherDisplayVoteCount }} 人</div>
           <p>點擊票數即可查看是哪些學員投給他。切換到其他投票輪次時，本輪結果會繼續保留。</p>
         </div>
       </div>
@@ -811,6 +830,20 @@ createApp({
         return { id:this.teacherViewRoundId, ...this.rounds[this.teacherViewRoundId] };
       }
       return this.settings.phase === 'voting' ? this.activeRound : null;
+    },
+    teacherDisplayRoundLabel() {
+      if (!this.teacherDisplayRound) return '投票輪次';
+      const index = this.allRoundArray.findIndex(round => round.id === this.teacherDisplayRound.id);
+      return index >= 0 ? `投票第 ${index + 1} 輪` : '投票輪次';
+    },
+    currentPhaseShortTitle() {
+      if (this.settings.phase === 'compose') return '第一階段｜個人撰寫';
+      if (this.settings.phase === 'showcase') return '第二階段｜全班展示';
+      if (this.settings.phase === 'voting') {
+        const index = this.activeRound ? this.allRoundArray.findIndex(round => round.id === this.activeRound.id) : -1;
+        return index >= 0 ? `任務投票｜第 ${index + 1} 輪` : '任務投票｜等待設定';
+      }
+      return '等待講師開始';
     },
     currentPhaseTitle() {
       if (this.settings.phase === 'compose') return '第一階段｜學員個人撰寫 STAR';
